@@ -1,0 +1,193 @@
+name: ${PROJECT_SLUG}
+
+services:
+    php:
+        container_name: ${PROJECT_SLUG}-php
+        build:
+            context: .
+            dockerfile: .docker/php/Dockerfile
+            args:
+                PHP_VERSION: ${PHP_VERSION:-8.2}
+                USER_ID: ${USER_ID:-1000}
+                GROUP_ID: ${GROUP_ID:-1000}
+        working_dir: /var/www/html
+        expose:
+            - "9000"
+        environment:
+            APP_ENV: dev
+            COMPOSER_CACHE_DIR: /composer/cache
+            XDEBUG_MODE: ${XDEBUG_MODE}
+            INSTALL_SYMFONY_CLI: ${INSTALL_SYMFONY_CLI}
+        volumes:
+            - ./app:/var/www/html:cached
+            - composer_cache:/composer/cache
+        networks:
+            - internal
+        healthcheck:
+            test: [ "CMD-SHELL", "php-fpm -t || exit 1" ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+    
+    web-nginx:
+        profiles: [ "nginx" ]
+        container_name: ${PROJECT_SLUG}-web
+        build:
+            context: .
+            dockerfile: .docker/web/nginx/Dockerfile
+            args:
+                VHOST: ${VHOST}
+                WEB_PORT: ${WEB_PORT}
+        depends_on:
+            php:
+                condition: service_healthy
+        ports:
+            - "${WEB_PORT}:80"
+        volumes:
+            - ./app:/var/www/html:cached
+            - ./.docker/web/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+        networks:
+            - internal
+        environment:
+            - NGINX_HOST=${VHOST}
+            - NGINX_PORT=80
+        healthcheck:
+            test: [ "CMD-SHELL", "curl -f http://${VHOST}:${WEB_PORT}/ || exit 1" ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+    
+    web-apache:
+        profiles: [ "apache" ]
+        container_name: ${PROJECT_SLUG}-web
+        build:
+            context: .
+            dockerfile: .docker/web/apache/Dockerfile
+            args:
+                VHOST: ${VHOST}
+                WEB_PORT: ${WEB_PORT}
+        depends_on:
+            php:
+                condition: service_healthy
+        ports:
+            - "${WEB_PORT}:80"
+        volumes:
+            - ./app:/var/www/html:cached
+            - ./.docker/web/apache/apache.conf:/usr/local/apache2/conf/extra/symfony.conf:ro
+        networks:
+            - internal
+        environment:
+            - APACHE_HOST=${VHOST}
+            - APACHE_PORT=80
+        healthcheck:
+            test: [ "CMD-SHELL", "curl -f http://${VHOST}:${WEB_PORT}/ || exit 1" ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+    
+    db:
+        container_name: ${PROJECT_SLUG}-db
+        image: ${DB_IMAGE}
+        environment:
+            # Postgres envs (ignored by MySQL image)
+            POSTGRES_DB: ${APP_DB_NAME}
+            POSTGRES_USER: ${APP_DB_USER}
+            POSTGRES_PASSWORD: ${APP_DB_PASSWORD}
+            # MySQL envs (ignored by Postgres image)
+            MYSQL_DATABASE: ${APP_DB_NAME}
+            MYSQL_USER: ${APP_DB_USER}
+            MYSQL_PASSWORD: ${APP_DB_PASSWORD}
+            MYSQL_ROOT_PASSWORD: ${APP_DB_PASSWORD}
+        ports:
+            - "${DB_PORT}:${DB_INTERNAL_PORT}"
+        volumes:
+            #- db_data:${DB_DATA_DIR}
+            - ./data/mysql:${DB_DATA_DIR}
+        networks:
+            - internal
+        healthcheck:
+            test: ["CMD", 'mysqladmin', 'ping', '-h', 'localhost', '-u$$APP_DB_USER', '-p$$APP_DB_PASSWORD' ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+    
+    phpmyadmin:
+        container_name: ${PROJECT_SLUG}-phpmyadmin
+        image: phpmyadmin/phpmyadmin
+        depends_on:
+            db:
+                condition: service_healthy
+        environment:
+            PMA_HOST: db
+            PMA_PORT: ${DB_INTERNAL_PORT}
+            PMA_ABSOLUTE_URI: http://${VHOST}:${PMA_PORT}/
+            MYSQL_USERNAME: ${APP_DB_USER}
+            MYSQL_PASSWORD: ${APP_DB_PASSWORD}
+            PMA_USERNAME: ${APP_DB_USER}
+            PMA_PASSWORD: ${APP_DB_PASSWORD}
+            UPLOAD_LIMIT: 256M
+        ports:
+            - "${PMA_PORT}:80"
+        networks:
+            - internal
+        healthcheck:
+            test: [ "CMD-SHELL", "wget -qO- http://${VHOST}:${PMA_PORT}/ || exit 1" ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+    
+    redis:
+        profiles: [ "redis" ]
+        container_name: ${PROJECT_SLUG}-redis
+        image: redis:7-alpine
+        ports:
+            - "${REDIS_PORT}:6379"
+        networks:
+            - internal
+        healthcheck:
+            test: [ "CMD", "redis-cli", "ping" ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+    
+    node:
+        profiles: [ "node" ]
+        container_name: ${PROJECT_SLUG}-node
+        build:
+            context: .
+            dockerfile: .docker/node/Dockerfile
+        working_dir: /var/www/html
+        volumes:
+            - ./app:/var/www/html:cached
+        networks:
+            - internal
+        healthcheck:
+            test: [ "CMD-SHELL", "npm -v || exit 1" ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+
+    mailpit:
+        profiles: [ "mailpit" ]
+        container_name: ${PROJECT_SLUG}-mailpit
+        image: axllent/mailpit:latest
+        ports:
+            - "1025:1025" # SMTP
+            - "8025:8025" # Web UI
+        networks:
+            - internal
+        healthcheck:
+            test: [ "CMD-SHELL", "wget -qO- http://${VHOST}:8025/ || exit 1" ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+
+networks:
+    internal:
+        name: ${PROJECT_SLUG}_net
+
+volumes:
+    db_data:
+        name: ${PROJECT_SLUG}_db_data
+    composer_cache:
+        name: ${PROJECT_SLUG}_composer_cache
