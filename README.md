@@ -1,151 +1,178 @@
-# Dockerized Symfony Project Scaffold (Makefile-driven)
+# Dockerized Symfony Project Scaffold 🚀  
+*(Makefile-driven bootstrapper for rapid Symfony development)*  
 
-This repository provides an interactive `make init` flow to bootstrap and run a Dockerized Symfony project in development (and suitable for CI). It supports Nginx (default) or Apache, PostgreSQL (default) or MySQL, optional Redis, and optional Node (Webpack Encore). The Symfony app is installed into `./app` at the repository root.
+This repository provides an **interactive `make init` wizard** to quickly bootstrap a fully containerized Symfony project.  
+It is designed for **developers, teams, and CI pipelines**, supporting flexible configurations:  
 
-Requirements:
-- Docker Desktop 4.x+
-- Docker Compose V2 (usually `docker compose`)
-- GNU Make
-- Bash shell (Linux/macOS, or Git Bash/WSL on Windows)
+- **Web server**: Nginx *(default)* or Apache  
+- **Database**: PostgreSQL *(default)* or MySQL  
+- **Cache/Session**: Redis *(optional)*  
+- **Frontend**: Asset Mapper *(default)* or Webpack Encore (with Node.js)  
 
-Note for Windows users:
-- Run `make` from Git Bash or WSL. This Makefile does not support PowerShell/cmd.
-- Hosts file updates require elevation; we attempt to prompt via PowerShell, otherwise provide manual instructions.
+Symfony is automatically installed in `./app`.  
 
-## Quick Start
+---
 
-1. Run the initializer:
-   ```bash
-   make init
-   ```
+## 🛠 Requirements  
 
-   The initializer will ask for:
-   - **Project name**
-   - **Symfony version**: latest stable (default), latest LTS, or a custom version string
-   - **Distribution**: Full (webapp) [default] or API
-   - **Frontend assets**: Asset Mapper [default] or Webpack Encore
-   - **Web server**: Nginx [default] or Apache (if Apache, symfony/apache-pack is installed)
-   - **Database**: PostgreSQL [default] or MySQL
-   - **Virtual host name** (default: localhost)
-   - Host ports for web, DB, and Redis (best-effort port conflict check)
+- Docker Desktop 4.x+  
+- Docker Compose V2 (`docker compose`)  
+- GNU Make  
+- Bash shell (Linux/macOS, or Git Bash/WSL on Windows)  
 
-   It creates `.make.local` and `.env`, generates Docker configs, brings containers up, creates the Symfony app in `./app`, installs packages, updates the hosts file (best-effort), and is idempotent on reruns.
+⚠️ **Windows users:**  
+- Run commands inside Git Bash or WSL (not PowerShell/cmd).  
+- Hosts file updates may require elevation (PowerShell prompt or manual edit).  
 
-2. Open your app:
-   http://<VHOST>:<WEB_PORT>
+---
 
-   Example: http://localhost:8080
+## ⚡ Quick Start  
 
-## Common Commands
+```bash
+    make init
+```
 
-- `make up / make down / make restart` - Start/stop/restart containers
-- `make ps / make logs [SERVICE=php|web-nginx|web-apache|db|redis|node]` - Show container status
-- `make terminal`- Shell inside PHP container
-- `make composer ARGS="..."`- Run Composer inside PHP container
-- `make console ARGS="..."` - Run Symfony console inside PHP container
-- `make cache-clear` - Clears Symfony cache
-- `make migrate` - Runs doctrine:migrations:migrate or falls back to schema:update
-- `make fixtures` - Runs doctrine:fixtures:load or falls back to dbal:import
-- `make assets` - Builds assets (Encore) or asset-map:compile
-- `make assets-watch` - Encore watch (requires Node profile)
-- `make assets-map` - Asset Mapper compile
-- `make tests` - Runs phpunit if present
-- `make xdebug-on / make xdebug-off` - Enable/disable XDebug
-- `make clean` - Stop and remove containers and volumes
-- `make reset` - Clean + remove ./app and node artifacts
+The initializer will guide you through:  
+- **Project name**  
+- **Symfony version**: latest stable *(default)*, latest LTS, or custom string  
+- **Distribution**: Full *(webapp, default)* or API  
+- **Frontend assets**: Asset Mapper *(default)* or Webpack Encore  
+- **Web server**: Nginx *(default)* or Apache  
+- **Database**: PostgreSQL *(default)* or MySQL  
+- **Virtual host name** *(default: localhost)*  
+- **Ports**: web, DB, Redis (with conflict detection)  
 
-## Services and Images
+✅ Result:  
+- `.make.local` and `.env` created  
+- Symfony installed in `./app`  
+- Containers built & started  
+- Hosts file updated (if possible)  
 
-- **PHP-FPM**: PHP 8.2 by default (configurable), Composer and Symfony CLI preinstalled, common extensions: intl, mbstring, zip, gd, xml, pdo_mysql, pdo_pgsql, opcache, sodium, imagick, xdebug (toggled by env).
-- **Web**: Nginx (default) or Apache configured for Symfony public/ as document root with sensible dev-friendly performance settings (gzip, caching for static assets, fastcgi tuning).
-- **DB**: PostgreSQL 16 (default) or MySQL 8.0. Persistent volume for data. Ports are mapped to host.
-- **Redis**: Optional, enabled by default via profile `redis`. Used for cache/sessions if configured.
-- **Node**: Optional, enabled when selecting Encore. Node 20-alpine with bash and corepack (yarn). Binds `./app` for frontend builds.
+Access your app:  
+👉 http://<VHOST>:<WEB_PORT>  
+*(e.g., http://localhost:8080)*  
 
-All container names and the network are prefixed with your project slug to avoid collisions, e.g. `<slug>-php`, `<slug>-web`, `<slug>-db`, `<slug>-redis`, `<slug>-node` and network `<slug>_net`.
+---
 
-## Configuration Files
+## 🧰 Common Commands  
 
-- **.env**: consumed by `docker-compose.yml` to configure services and names.
-- **.make.local**: persisted answers from `make init` (also APP_DB_* defaults for DB initialization).
-- **.docker/**
-  - php/Dockerfile and php/conf/{php.ini, xdebug.ini}
-  - web/nginx/{Dockerfile, nginx.conf} (generated from nginx.conf.tpl)
-  - web/apache/{Dockerfile, vhost.conf} (generated from vhost.conf.tpl)
-  - node/Dockerfile
+| Command | Description |
+|---------|-------------|
+| `make up / make down / make restart` | Start/stop/restart containers |
+| `make ps` | List container status |
+| `make logs [SERVICE=php|web|db|redis|node]` | Show logs |
+| `make terminal` | Open a shell in the PHP container |
+| `make composer ARGS="..."` | Run Composer inside container |
+| `make console ARGS="..."` | Run Symfony console |
+| `make cache-clear` | Clear Symfony cache |
+| `make migrate` | Run Doctrine migrations (or fallback) |
+| `make fixtures` | Load fixtures (or DB import) |
+| `make assets` | Build assets (Encore or Asset Mapper) |
+| `make assets-watch` | Watch assets with Encore |
+| `make tests` | Run PHPUnit |
+| `make xdebug-on / make xdebug-off` | Toggle Xdebug |
+| `make clean` | Remove containers & volumes |
+| `make reset` | Full reset (remove `./app` & Node artifacts) |
 
-## Project Structure
+---
+
+## 🏗 Service Architecture  
+
+```
+                ┌───────────────┐
+                │   Nginx/Apache│
+                │    (web)      │
+                └───────▲───────┘
+                        │
+                        ▼
+┌─────────────┐   ┌─────────────┐   ┌──────────┐
+│   PHP-FPM   │   │   Database  │   │   Redis  │
+│ (Symfony)   │   │ (Postgres/  │   │ (optional│
+│  Composer   │   │  MySQL)     │   │  cache)  │
+└───────▲─────┘   └──────▲──────┘   └────▲─────┘
+        │                │              │
+        ▼                │              │
+    ┌─────────────┐      │         ┌───────────┐
+    │   Node.js   │◄─────┘         │   Browser │
+    │ (Encore)    │   Frontend     │  (Client) │
+    └─────────────┘   Assets       └───────────┘
+```
+
+---
+
+## 📂 Project Structure  
 
 ```
 .
 ├── Makefile
 ├── docker-compose.yml
 ├── README.md
-├── .env                 # Symfony environment variables, generated by `make init`
-├── .make.local          # Project configuration, generated by `make init`
-├── app/                 # Symfony app (created by init)
+├── .env                 # Symfony environment variables
+├── .make.local          # Saved init config
+├── app/                 # Symfony project
 └── .docker/
     ├── php/
-    │   ├── Dockerfile          # PHP image
-    │   └── conf/
-    │       ├── php.ini         # PHP configuration
-    │       └── xdebug.ini      # XDebug configuration
+    │   ├── Dockerfile
+    │   └── conf/{php.ini, xdebug.ini}
     ├── web/
-    │   ├── nginx/
-    │   │   ├── Dockerfile      # Nginx image
-    │   │   ├── nginx.conf.tpl  # Nginx configuration template
-    │   │   └── nginx.conf      # Nginx configuration, generated from template on init
-    │   └── apache/
-    │       ├── Dockerfile      # Apache image
-    │       ├── vhost.conf.tpl  # Apache configuration template
-    │       └── vhost.conf      # Apache configuration, generated from template on init
+    │   ├── nginx/       # Nginx configs/templates
+    │   └── apache/      # Apache configs/templates
     └── node/
-        └── Dockerfile          # Node image
+        └── Dockerfile
 ```
 
-Notes:
-- Files annotated as “generated” are created by the `make init` flow and will not be overwritten on reruns if they already exist (idempotent).
-- Named Docker volumes (e.g., `<slug>_db_data`, `<slug>_composer_cache`) are created by Docker and are not shown in the tree.
+---
 
-## Hosts File Handling
+## 🔧 Configuration Files  
 
-- VHOST default is `localhost`. If you provide a custom vhost, `make init` will try to update the OS hosts file:
-  - Linux/macOS: `/etc/hosts` using sudo tee
-  - Windows: `C:\Windows\System32\drivers\etc\hosts` via elevated PowerShell
-- Idempotent: it won’t add duplicates. If elevation fails, you’ll get manual instructions.
+- **.env** → Injected into containers (`docker-compose.yml`)  
+- **.make.local** → Stores init answers (project slug, DB defaults…)  
+- **.docker/** → Service definitions & config templates  
 
-## Idempotency and Reruns
+Idempotent behavior:  
+- Existing configs are preserved  
+- Ports checked before assignment  
+- Symfony reused unless reset  
 
-- If `./app` already exists, you’ll be asked whether to reuse it. If you choose to recreate, the folder is removed and the project reinstalled.
-- Config templates are only copied if the destination doesn’t exist.
-- Ports are checked with `nc` when available; if in use, you’ll be prompted for alternatives.
+---
 
-## Asset Mapper vs Webpack Encore
+## 🎨 Asset Mapper vs Webpack Encore  
 
-- Asset Mapper is chosen by default. If the selected Symfony version doesn’t support it, the init flow falls back to Encore automatically, enabling the `node` profile and installing Encore dependencies.
+- **Asset Mapper** *(default)*: lightweight, modern.  
+- **Encore**: automatically selected if Asset Mapper unsupported. Enables `node` profile.  
 
-## Environment Variables in app/.env.local
+---
 
-The initializer writes reasonable defaults:
-- APP_ENV=dev
-- APP_DEBUG=1
-- APP_URL based on VHOST and port
-- TRUSTED_PROXIES and TRUSTED_HOSTS
-- DATABASE_URL based on DB choice
-- REDIS_URL configured to the `redis` service
+## ⚙️ Environment Variables  
 
-## Troubleshooting
+Generated `app/.env.local` includes:  
+- `APP_ENV=dev`  
+- `APP_DEBUG=1`  
+- `APP_URL`  
+- `TRUSTED_PROXIES`, `TRUSTED_HOSTS`  
+- `DATABASE_URL`  
+- `REDIS_URL` (if enabled)  
 
-- **Ports in use**: choose alternate ports when prompted, or edit `.env` and rerun `make restart`.
-- **Hosts update fails**: manually add `127.0.0.1 <your-vhost>` to your hosts file.
-- **Composer memory limits**: adjust memory_limit in `.docker/php/conf/php.ini`.
-- **Xdebug not connecting**: ensure IDE listens on 9003 and XDEBUG_MODE is `debug,develop` (`make xdebug-on`).
-- **Windows file permissions**: Use Git Bash or WSL. If volume permissions cause issues, ensure your host user is uid 1000 or adjust Dockerfile user settings.
+---
 
-## CI Usage
+## 🐛 Troubleshooting  
 
-Use `docker compose` with profiles to spin up only required services. Composer cache is persisted in a named volume to speed up builds.
+- **Port conflicts** → choose another port, update `.env`, `make restart`  
+- **Hosts file not updated** → manually add `127.0.0.1 <vhost>`  
+- **Composer memory issues** → increase memory in `.docker/php/conf/php.ini`  
+- **Xdebug issues** → check IDE listening on `9003`, toggle with `make xdebug-on`  
+- **Windows file permissions** → ensure host user `uid=1000`, or adjust Dockerfile  
 
-## License
+---
 
-This project is open source and available under the MIT License.
+## 🤖 CI/CD Usage  
+
+- Use `docker compose --profile ... up` to start only required services  
+- Composer cache persisted in named volume (`<slug>_composer_cache`) for faster builds  
+
+---
+
+## 📜 License  
+
+MIT License. Free to use, modify, and share.
+
