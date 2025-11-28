@@ -1,0 +1,49 @@
+name: Rollback
+
+on:
+    workflow_dispatch:
+        inputs:
+            environment:
+                description: "prod ou pprod"
+                required: true
+                default: "prod"
+            keep:
+                description: "Nombre de releases à garder"
+                required: false
+                default: "5"
+
+jobs:
+    rollback:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Set deployment date as env var
+              run: echo "DEPLOY_DATE=${{ github.run_started_at }}" >> $GITHUB_ENV
+
+            - name: Setup SSH
+              run: |
+                  mkdir -p ~/.ssh
+                  echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+                  chmod 600 ~/.ssh/id_ed25519
+                  ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+            - name: Run rollback script on server
+              run: |
+                  ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "${{ secrets.APP_PATH }}/$TARGET/SiteMonitor/bin/rollback.sh ${{ github.event.inputs.environment }} ${{ github.event.inputs.keep }}"
+
+            - name: Send rollback notification
+              if: always()
+              uses: dawidd6/action-send-mail@v3
+              with:
+                  server_address: ${{ secrets.SMTP_SERVER }}
+                  server_port: ${{ secrets.SMTP_PORT }}
+                  username: ${{ secrets.SMTP_USERNAME }}
+                  password: ${{ secrets.SMTP_PASSWORD }}
+                  subject: "⏪ Rollback ${{ github.event.inputs.environment }} - ${{ github.repository }}"
+                  to: ${{ vars.MAIL_TO }}
+                  from: ${{ vars.MAIL_FROM }}
+                  body: |
+                    Repository : ${{ github.repository }}
+                    Environnement : ${{ github.event.inputs.environment }}
+                    Auteur : ${{ github.actor }}
+                    Date : ${{ env.DEPLOY_DATE }}

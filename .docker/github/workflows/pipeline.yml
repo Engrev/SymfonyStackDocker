@@ -1,0 +1,100 @@
+name: CI/CD
+
+on:
+    push:
+        branches:
+            - release
+            - feat/**
+            - fix/**
+            - docs/**
+            - style/**
+            - refactor/**
+            - perf/**
+            - test/**
+            - core/**
+    pull_request:
+        branches:
+            - main
+
+jobs:
+    ci:
+        name: CI (lint + tests)
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up PHP
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.4'
+                  extensions: mbstring, pdo_mysql, intl, curl, xml, zip
+                  coverage: none
+
+            - name: Install dependencies
+              run: composer install --no-progress --no-suggest --prefer-dist --optimize-autoloader
+
+            - name: Lint YAML/Twig
+              run: |
+                  php bin/console lint:yaml config || true
+                  php bin/console lint:twig templates || true
+
+            - name: Run tests
+              run: php bin/phpunit
+
+    deploy:
+        name: Deploy
+        needs: ci
+        runs-on: ubuntu-latest
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release'
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Generate release name
+              run: echo "RELEASE_NAME=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_ENV
+
+            - name: Set deployment date as env var
+              run: echo "DEPLOY_DATE=${{ github.run_started_at }}" >> $GITHUB_ENV
+
+            - name: Setup SSH
+              run: |
+                  mkdir -p ~/.ssh
+                  chmod 700 ~/.ssh
+                  echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+                  chmod 600 ~/.ssh/id_ed25519
+                  ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+            - name: Rsync release
+              run: |
+                  TARGET=$( [ "${{ github.ref }}" == "refs/heads/main" ] && echo "prod" || echo "pprod" )
+                  RSYNC_DEST="${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.APP_PATH }}/$TARGET/SiteMonitor/releases/${{ env.RELEASE_NAME }}"
+                  rsync -az --delete \
+                    --exclude='.git' --exclude='node_modules' --exclude='var/cache/*' --exclude='vendor' \
+                    ./ $RSYNC_DEST
+
+            - name: Activate release
+              run: |
+                  TARGET=$( [ "${{ github.ref }}" == "refs/heads/main" ] && echo "prod" || echo "pprod" )
+                  ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "${{ secrets.APP_PATH }}/$TARGET/SiteMonitor/bin/activate_release.sh $TARGET ${{ env.RELEASE_NAME }}"
+
+            - name: Healthcheck
+              run: |
+                  DOMAIN=$( [ "${{ github.ref }}" == "refs/heads/main" ] && echo "sitemonitor.prod.engrev.dev" || echo "sitemonitor.pprod.engrev.dev" )
+                  curl -f https://$DOMAIN/health || exit 1
+
+            - name: Send deployment notification
+              if: always()
+              uses: dawidd6/action-send-mail@v3
+              with:
+                  server_address: ${{ secrets.SMTP_SERVER }}
+                  server_port: ${{ secrets.SMTP_PORT }}
+                  username: ${{ secrets.SMTP_USERNAME }}
+                  password: ${{ secrets.SMTP_PASSWORD }}
+                  subject: "🚀 [${{ github.ref_name }}] Déploiement ${{ job.status }}"
+                  to: ${{ vars.MAIL_TO }}
+                  from: ${{ vars.MAIL_FROM }}
+                  body: |
+                    Repository : ${{ github.repository }}
+                    Branche : ${{ github.ref_name }}
+                    Auteur : ${{ github.actor }}
+                    Status : ${{ job.status }}
+                    Date : ${{ env.DEPLOY_DATE }}
