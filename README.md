@@ -56,45 +56,45 @@ Access your app:
 
 ## 🧰 Common Commands  
 
-| Command | Description |
-|---------|-------------|
-| `make up / make down / make restart` | Start/stop/restart containers |
-| `make ps` | List container status |
-| `make logs [SERVICE=php|web|db|redis|node]` | Show logs |
-| `make terminal` | Open a shell in the PHP container |
-| `make composer ARGS="..."` | Run Composer inside container |
-| `make console ARGS="..."` | Run Symfony console |
-| `make cache-clear` | Clear Symfony cache |
-| `make migrate` | Run Doctrine migrations (or fallback) |
-| `make fixtures` | Load fixtures (or DB import) |
-| `make assets` | Build assets (Encore or Asset Mapper) |
-| `make assets-watch` | Watch assets with Encore |
-| `make tests` | Run PHPUnit |
-| `make xdebug-on / make xdebug-off` | Toggle Xdebug |
-| `make clean` | Remove containers & volumes |
-| `make reset` | Full reset (remove `./app` & Node artifacts) |
+| Command                                         | Description |
+|-------------------------------------------------|-------------|
+| `make up / make down / make restart`            | Start/stop/restart containers |
+| `make ps`                                       | List container status |
+| `make logs [SERVICE=php\|web\|db\|redis\|node]` | Show logs |
+| `make terminal`                                 | Open a shell in the PHP container |
+| `make composer ARGS="..."`                      | Run Composer inside container |
+| `make console ARGS="..."`                       | Run Symfony console |
+| `make cache-clear`                              | Clear Symfony cache |
+| `make migrate`                                  | Run Doctrine migrations (or fallback) |
+| `make fixtures`                                 | Load fixtures (or DB import) |
+| `make assets`                                   | Build assets (Encore or Asset Mapper) |
+| `make assets-watch`                             | Watch assets with Encore |
+| `make tests`                                    | Run PHPUnit |
+| `make xdebug-on / make xdebug-off`              | Toggle Xdebug |
+| `make clean`                                    | Remove containers & volumes |
+| `make reset`                                    | Full reset (remove `./app` & Node artifacts) |
 
 ---
 
 ## 🏗 Service Architecture  
 
 ```
-                ┌───────────────┐
-                │   Nginx/Apache│
-                │    (web)      │
-                └───────▲───────┘
+                ┌──────────────┐
+                │ Nginx/Apache │
+                │    (web)     │
+                └───────▲──────┘
                         │
-                        ▼
-┌─────────────┐   ┌─────────────┐   ┌──────────┐
-│   PHP-FPM   │   │   Database  │   │   Redis  │
-│ (Symfony)   │   │ (Postgres/  │   │ (optional│
-│  Composer   │   │  MySQL)     │   │  cache)  │
-└───────▲─────┘   └──────▲──────┘   └────▲─────┘
-        │                │              │
-        ▼                │              │
-    ┌─────────────┐      │         ┌───────────┐
-    │   Node.js   │◄─────┘         │   Browser │
-    │ (Encore)    │   Frontend     │  (Client) │
+                        │
+┌─────────────┐   ┌─────▼───────┐   ┌───────────┐
+│   PHP-FPM   │   │   Database  │   │   Redis   │
+│  (Symfony)  │   │ (Postgres/  │   │ (optional │
+│  Composer   │   │  MySQL)     │   │  cache)   │
+└───────▲─────┘   └──────▲──────┘   └────▲──────┘
+        │                │               │
+        │                │               │
+    ┌───▼─────────┐      │         ┌───────────┐
+    │   Node.js   │◄─────┘         │  Browser  │
+    │  (Encore)   │   Frontend     │  (Client) │
     └─────────────┘   Assets       └───────────┘
 ```
 

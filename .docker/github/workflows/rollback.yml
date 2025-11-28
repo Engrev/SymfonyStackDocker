@@ -29,7 +29,7 @@ jobs:
 
             - name: Run rollback script on server
               run: |
-                  ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "${{ secrets.APP_PATH }}/$TARGET/SiteMonitor/bin/rollback.sh ${{ github.event.inputs.environment }} ${{ github.event.inputs.keep }}"
+                  ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "${{ secrets.APP_PATH }}/$TARGET/<PROJECTNAME>/bin/rollback.sh ${{ github.event.inputs.environment }} ${{ github.event.inputs.keep }}"
 
             - name: Send rollback notification
               if: always()
