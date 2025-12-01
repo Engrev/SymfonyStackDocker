@@ -267,6 +267,7 @@ _setup-symfony-app: # Create the Symfony application in ./app
 		fi; \
 	fi
 	@cp phpstan.dist.neon app/phpstan.dist.neon
+	@cp .docker/github/workflows app/.github/workflows
 _setup-assets: # Configures assets (Asset Mapper or Webpack Encore) according to the selection
 	$(call title,Setup Assets)
 	@if [ $(ASSETS) = "encore" ]; then \
