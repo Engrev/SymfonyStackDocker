@@ -251,7 +251,9 @@ _setup-symfony-app: # Create the Symfony application in ./app
 	    if [ $(DIST) = "webapp" ]; then \
 			if [ $(SYMFONY_VERSION) = "stable" ]; then \
 				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "cd /var/www/html && symfony new . --webapp --no-git"; \
-			else \
+			elif [ $(SYMFONY_VERSION) = "lts" ]; then \
+				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "cd /var/www/html && symfony new . --version=$(SYMFONY_VERSION) --webapp --no-git"; \
+			else
 				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "cd /var/www/html && symfony new . --version='$(SYMFONY_VERSION)' --webapp --no-git"; \
 			fi; \
 			if [ $(WEB_SERVER) = "apache" ]; then \
@@ -260,6 +262,8 @@ _setup-symfony-app: # Create the Symfony application in ./app
 		else \
 			if [ $(SYMFONY_VERSION) = "stable" ]; then \
 				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "cd /var/www/html && symfony new . --no-git"; \
+			elif [ $(SYMFONY_VERSION) = "lts" ]; then \
+				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "cd /var/www/html && symfony new . --version=$(SYMFONY_VERSION) --no-git"; \
 			else \
 				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "cd /var/www/html && symfony new . --version='$(SYMFONY_VERSION)' --no-git"; \
 			fi; \
@@ -267,7 +271,8 @@ _setup-symfony-app: # Create the Symfony application in ./app
 		fi; \
 	fi
 	@cp phpstan.dist.neon app/phpstan.dist.neon
-	@cp .docker/github/workflows app/.github/workflows
+	@mkdir -p app/.github
+	@cp -r .docker/github/workflows app/.github/
 _setup-assets: # Configures assets (Asset Mapper or Webpack Encore) according to the selection
 	$(call title,Setup Assets)
 	@if [ $(ASSETS) = "encore" ]; then \

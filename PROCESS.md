@@ -2,22 +2,23 @@
 
 ## Création du projet
 
-1. Initialisation du projet (symfony new).
-2. Envoyer le projet sur github.
-3. Créer la branche **release** depuis **main**.
+1. Cloner [SymfonyStackDocker](https://github.com/Engrev/SymfonyStackDocker).
+2. Installer le projet : `make install`.
+3. Envoyer le projet sur github.
+4. Créer la branche **release** depuis **main**.
 
 ## Sur le serveur
 
 ### SSH
 
-4. Créer un utilisateur ssh sur le serveur pour le déploiement.
-5. Générer une clé ssh pour cet utilisateur : `ssh-keygen -t ed25519 -C "github-deploy"`.
-6. Récupérer cette clé (publique) : `cat ~/.ssh/id_ed25519.pub`.
-7. L'ajouter au projet sur github : Settings → Deploy Keys → Add deploy key.
-8. Tester la connexion ssh : `ssh -i ~/.ssh/id_ed25519 -T git@github.com`.
+5. Créer un utilisateur ssh sur le serveur pour le déploiement.
+6. Générer une clé ssh pour cet utilisateur : `ssh-keygen -t ed25519 -C "github-deploy"`.
+7. Récupérer cette clé (publique) : `cat ~/.ssh/id_ed25519.pub`.
+8. L'ajouter au projet sur github : Settings → Deploy Keys → Add deploy key.
+9. Tester la connexion ssh : `ssh -i ~/.ssh/id_ed25519 -T git@github.com`.
    👉 Si tout est bon, tu devrais voir un message du genre :
    ***Hi <username>! You've successfully authenticated, but GitHub does not provide shell access.***
-9. On simplifie l’utilisation de la clé, en disant à SSH “quand je parle à github.com, utilise cette clé” : `nano ~/.ssh/config`.
+10. On simplifie l’utilisation de la clé, en disant à SSH “quand je parle à github.com, utilise cette clé” : `nano ~/.ssh/config`.
 ```
 Host github.com
   HostName github.com
@@ -28,7 +29,7 @@ Host github.com
 
 ### Arborescence
 
-10. Créer l’arborescence projet :
+11. Créer l’arborescence projet :
 ```
 /var/www/
 ├── project_name/
@@ -54,18 +55,18 @@ Avec ces commandes :
 
 ### Installation du projet
 
-11. Cloner le projet dans releases/ avec le timestamp :
+12. Cloner le projet dans releases/ avec le timestamp :
 ```bash
   cd /var/www/<project_name>/pprod/releases
   git clone git@github.com:<User>/<ProjectName>.git YYYYMMDD-Hi
 ```
-12. Installer les dépendances :
+13. Installer les dépendances :
 ```bash
   composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --classmap-authoritative
   php bin/console cache:clear --env=prod
   php bin/console doctrine:migrations:migrate --no-interaction --env=prod
 ```
-13. Lier les dossiers partagés :
+14. Lier les dossiers partagés :
 ```bash
   ln -sfn /var/www/<project_name>/pprod/releases/YYYYMMDD-Hi /var/www/<project_name>/pprod/current
   mv /var/www/<project_name>/pprod/releases/YYYYMMDD-Hi/.env /var/www/<project_name>/pprod/shared/.env
@@ -77,8 +78,8 @@ Avec ces commandes :
   mkdir -p /var/www/<project_name>/pprod/shared/public/uploads
   ln -sfn /var/www/<project_name>/pprod/shared/public/uploads /var/www/<project_name>/pprod/current/public/uploads
 ```
-14. Copier les scripts [**activate_release.sh**](.docker/github/bin/activate_release.sh) et [**rollback.sh**](.docker/github/bin/rollback.sh) dans **/var/www/<project_name>/bin/**.
-15. Les rendre exécutables : `chmod +x /var/www/<project_name>/bin/*.sh`.
+15. Copier les scripts [**activate_release.sh**](.docker/github/bin/activate_release.sh) et [**rollback.sh**](.docker/github/bin/rollback.sh) dans **/var/www/<project_name>/bin/**.
+16. Les rendre exécutables : `chmod +x /var/www/<project_name>/bin/*.sh`.
 Exemples d'utilisation des scripts :
 ```
   /var/www/<project_name>/bin/activate_release.sh <prod|pprod> <release-name>
@@ -98,5 +99,6 @@ Exemples d'utilisation des scripts :
 | SMTP_*              | pour envoi d’email |
 | MAIL_TO / MAIL_FROM | destinataire & expéditeur des notifications |
 
+## Sur l'hébergeur
 
-Créer le sous-domaine/domaine pour le projet sur le serveur et définir le chemin des fichiers sur **/var/www/<project_name>/<pprod|prod>/current/public/**.
+17. Créer le sous-domaine/domaine pour le projet et définir le chemin des fichiers sur **/<dossier_du_projet>/current/public/**.
