@@ -4,7 +4,7 @@
 
 1. Cloner [SymfonyStackDocker](https://github.com/Engrev/SymfonyStackDocker).
 2. Installer le projet : `make install`.
-3. Envoyer le projet sur github.
+3. Envoyer le projet sur github : `git init` et terminer avec Github Desktop par exemple.
 4. Créer la branche **release** depuis **main**.
 
 ## Sur le serveur
@@ -26,6 +26,7 @@ Host github.com
   IdentityFile /home/<user>/.ssh/id_ed25519
   IdentitiesOnly yes
 ```
+Il faut également l'ajouter dans **/home/\<user>/.ssh/authorized_keys**.
 
 ### Arborescence
 
@@ -34,16 +35,16 @@ Host github.com
 /var/www/
 ├── project_name/
 │   ├── prod/
-│   │   ├── current -> releases/YYYYMMDD-Hi2/
+│   │   ├── current -> releases/YYYYMMDD_Hi2/
 │   │   ├── releases/
-│   │   │   ├── YYYYMMDD-Hi2/
-│   │   │   └── YYYYMMDD-Hi1/
+│   │   │   ├── YYYYMMDD_Hi2/
+│   │   │   └── YYYYMMDD_Hi1/
 │   │   └── shared/   # logs, cache, sessions, uploads, .env.local
 │   └── pprod/
-│       ├── current -> releases/YYYYMMDD-Hi2/
+│       ├── current -> releases/YYYYMMDD_Hi2/
 │       ├── releases/
-│       │   ├── YYYYMMDD-Hi2/
-│       │   └── YYYYMMDD-Hi1/
+│       │   ├── YYYYMMDD_Hi2/
+│       │   └── YYYYMMDD_Hi1/
 │       └── shared/
 ```
 Avec ces commandes :
@@ -58,28 +59,33 @@ Avec ces commandes :
 12. Cloner le projet dans releases/ avec le timestamp :
 ```bash
   cd /var/www/<project_name>/pprod/releases
-  git clone git@github.com:<User>/<ProjectName>.git YYYYMMDD-Hi
+  git clone -b <branch> git@github.com:<User>/<ProjectName>.git YYYYMMDD_Hi # branch = release pour pprod, main pour prod
 ```
-13. Installer les dépendances :
+13. Installer les dépendances et liaison des fichiers/dossiers partagés :
 ```bash
+  cd /var/www/<project_name>/pprod/releases/YYYYMMDD_Hi
   composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --classmap-authoritative
   php bin/console cache:clear --env=prod
-  php bin/console doctrine:migrations:migrate --no-interaction --env=prod
-```
-14. Lier les dossiers partagés :
-```bash
-  ln -sfn /var/www/<project_name>/pprod/releases/YYYYMMDD-Hi /var/www/<project_name>/pprod/current
-  mv /var/www/<project_name>/pprod/releases/YYYYMMDD-Hi/.env /var/www/<project_name>/pprod/shared/.env
-  ln -sfn /var/www/<project_name>/pprod/shared/.env /var/www/<project_name>/pprod/current/.env
-  
+  composer dump-env prod
+  mv .env.local.php ../../shared/.env
+  # Modifier le .env avec les bonnes valeurs
+  # Pour générer un APP_SECRET : openssl rand -hex 32
+  ln -sfn ../../shared/.env ./.env.local
+  #php bin/console doctrine:migrations:migrate --no-interaction --env=prod
+  ln -sfn /var/www/<project_name>/pprod/releases/YYYYMMDD_Hi /var/www/<project_name>/pprod/current
+
   mkdir -p /var/www/<project_name>/pprod/shared/var/log
+  rm -rf /var/www/<project_name>/pprod/current/var/log
   ln -sfn /var/www/<project_name>/pprod/shared/var/log /var/www/<project_name>/pprod/current/var/log
   
   mkdir -p /var/www/<project_name>/pprod/shared/public/uploads
   ln -sfn /var/www/<project_name>/pprod/shared/public/uploads /var/www/<project_name>/pprod/current/public/uploads
+
+  php bin/console importmap:install
+  php bin/console asset-map:compile
 ```
-15. Copier les scripts [**activate_release.sh**](.docker/github/bin/activate_release.sh) et [**rollback.sh**](.docker/github/bin/rollback.sh) dans **/var/www/<project_name>/bin/**.
-16. Les rendre exécutables : `chmod +x /var/www/<project_name>/bin/*.sh`.
+14. Copier les scripts [**activate_release.sh**](.docker/bin/activate_release.sh) et [**rollback.sh**](.docker/bin/rollback.sh) dans **/var/www/<project_name>/bin/**.
+15. Les rendre exécutables : `chmod +x /var/www/<project_name>/bin/*.sh`.
 Exemples d'utilisation des scripts :
 ```
   /var/www/<project_name>/bin/activate_release.sh <prod|pprod> <release-name>
@@ -101,4 +107,6 @@ Exemples d'utilisation des scripts :
 
 ## Sur l'hébergeur
 
-17. Créer le sous-domaine/domaine pour le projet et définir le chemin des fichiers sur **/<dossier_du_projet>/current/public/**.
+16. Créer le sous-domaine/domaine pour le projet et définir le chemin des fichiers sur **/<dossier_du_projet>/current/public/**.
+17. Si le serveur fonctionne sous apache et qu'apache n'est pas défini en tant que webserver lors de l'installation du projet (en local), rajouter le [**.htaccess**](.docker/.htaccess).
+18. Tester d'accéder à votre sous-domaine/domaine.

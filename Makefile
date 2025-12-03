@@ -131,7 +131,7 @@ _env: # Configures the project interactively and writes .make.local and .env
 		read -r -p "Front-end assets [mapper (default) / webpack] : " assets; \
 		if [ "$$assets" != "mapper" ] && [ "$$assets" != "webpack" ]; then assets=$(ASSETS); fi; \
 		echo "ASSETS=$$assets" >> .make.local; \
-		if [ -z "$$profiles" ]; then profiles="$$assets"; else profiles+=",$$assets"; fi; \
+		if [ -z "$$profiles" ]; then profiles+="$$assets"; else profiles+=",$$assets"; fi; \
 		read -r -p "Web server [nginx (default) / apache] : " webserver; \
 		if [ "$$webserver" != "nginx" ] && [ "$$webserver" != "apache" ]; then webserver=$(WEB_SERVER); fi; \
 		echo "WEB_SERVER=$$webserver" >> .make.local; \
