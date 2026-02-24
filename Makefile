@@ -71,12 +71,12 @@ help:
 	# PROJECT_SLUG: Slug used for container names and network (lowercase, hyphens)
 	# SYMFONY_VERSION: "latest" (empty), "lts", or a custom version constraint
 	# DIST: "webapp" or "api"
-	# ASSETS: "mapper" or "encore"
+	# ASSETS: "mapper" or "webpack"
 	# WEB_SERVER: "nginx" or "apache"
-	# DB_CHOICE: "postgres" or "mysql"
+	# DB_CHOICE: "postgres" or "mariadb"
 	# VHOST: e.g., "localhost" or "my-app.local"
 	# WEB_PORT: e.g., 8080
-	# DB_PORT: 5432 (postgres) or 3306 (mysql)
+	# DB_PORT: 5432 (postgres) or 3306 (mariadb)
 	# REDIS_PORT: 6379
 	# PHP_VERSION: default 8.2 unless overridden by Symfony requirements
 	# XDEBUG_MODE: off by default; set to debug,develop when enabled
@@ -101,7 +101,7 @@ _check-docker: # Check that Docker is installed and running
 	@$(DOCKER) info >/dev/null 2>&1 || { echo -e "$(RED)Docker is installed but not started. Launch Docker Desktop / start the Docker service.$(NC)\n$(YELLOW)Start Docker and then run 'make install' again.$(NC)"; }
 	@command -v docker >/dev/null 2>&1 && $(DOCKER) info >/dev/null 2>&1 && echo -e "$(GREEN)Docker installed and running.$(NC)"
 _default-ports: # Shows the default ports used (WEB, DB, REDIS)
-	@echo ""; echo -e "$(BLUE)Info :$(NC) Default ports -> WEB: 8080, DB: 5432 (Postgres) / 3307 (MariaDB), REDIS: 6379"
+	@echo ""; echo -e "$(BLUE)Info :$(NC) Default ports -> WEB: 8080, DB: 5432 (Postgres) / 3306 (MariaDB), REDIS: 6379"
 _env: # Configures the project interactively and writes .make.local and .env
 	$(call title,Environment Variables)
 	@echo "It will write configuration to .make.local and .env."
@@ -123,22 +123,23 @@ _env: # Configures the project interactively and writes .make.local and .env
 		echo "PROJECT_SLUG=$$project_slug" >> .make.local; \
 		echo "PROJECT_SLUG=$$project_slug" >> .env; \
 		read -r -p "Symfony version [latest stable (stable, default) / latest LTS (lts) / custom (e.g., 7.1.*)] : " symfony_version; \
-		if [ -z "$$symfony_version" ]; then symfony_version=$(SYMFONY_VERSION); fi; \
+		if [ -z "$$symfony_version" ]; then symfony_version="stable"; fi; \
 		echo "SYMFONY_VERSION=$$symfony_version" >> .make.local; \
 		read -r -p "Distribution [webapp (default) / api] : " distribution; \
-		if [ "$$distribution" != "webapp" ] && [ "$$distribution" != "api" ]; then distribution=$(DIST); fi; \
+		if [ "$$distribution" != "webapp" ] && [ "$$distribution" != "api" ]; then distribution="webapp"; fi; \
 		echo "DIST=$$distribution" >> .make.local; \
 		read -r -p "Front-end assets [mapper (default) / webpack] : " assets; \
-		if [ "$$assets" != "mapper" ] && [ "$$assets" != "webpack" ]; then assets=$(ASSETS); fi; \
+		if [ "$$assets" != "mapper" ] && [ "$$assets" != "webpack" ]; then assets="mapper"; fi; \
 		echo "ASSETS=$$assets" >> .make.local; \
 		if [ -z "$$profiles" ]; then profiles+="$$assets"; else profiles+=",$$assets"; fi; \
 		read -r -p "Web server [nginx (default) / apache] : " webserver; \
-		if [ "$$webserver" != "nginx" ] && [ "$$webserver" != "apache" ]; then webserver=$(WEB_SERVER); fi; \
+		if [ "$$webserver" != "nginx" ] && [ "$$webserver" != "apache" ]; then webserver="nginx"; fi; \
 		echo "WEB_SERVER=$$webserver" >> .make.local; \
 		echo "WEB_SERVER=$$webserver" >> .env; \
 		profiles+=",$$webserver"; \
-		read -r -p "Database [mysql (default) / postgres] : " database; \
-		if [ "$$database" != "postgres" ] && [ "$$database" != "mysql" ]; then database=$(DB); fi; \
+		read -r -p "Database [mariadb (default) / postgres] : " database; \
+		if [ "$$database" != "postgres" ] && [ "$$database" != "mariadb" ]; then database="mariadb"; fi; \
+		if [ "$$database" = "mariadb" ]; then profiles+=",pma"; fi; \
 		echo "DB=$$database" >> .make.local; \
 		echo "DB=$$database" >> .env; \
 		read -r -p "Virtual host [$$default_vhost] : " virtual_host; \
@@ -196,9 +197,9 @@ _env: # Configures the project interactively and writes .make.local and .env
 		echo "PHP_VERSION=$$php_version" >> .make.local; \
 		echo "PHP_VERSION=$$php_version" >> .env; \
 		if [ "$$database" = "postgres" ]; then \
-			db_image=postgres:16-alpine; db_internal_port=5432; db_data_dir=/var/lib/postgresql/data; \
+			db_image=postgres:18.2-alpine; db_internal_port=5432; db_data_dir=/var/lib/postgresql/data; \
 		else \
-			db_image=mysql:lts; db_internal_port=3306; db_data_dir=/var/lib/mysql; \
+			db_image=mariadb:lts-ubi9; db_internal_port=3306; db_data_dir=/var/lib/mysql; \
 		fi; \
 		echo "DB_IMAGE=$$db_image" >> .env; \
 		echo "DB_INTERNAL_PORT=$$db_internal_port" >> .env; \
@@ -225,13 +226,13 @@ _env: # Configures the project interactively and writes .make.local and .env
 	fi
 _webserver: # Generates web server configuration from templates
 	$(call title,Webserver configuration)
-	@if [ ! -f .docker/web/nginx/nginx.conf ]; then cp .docker/web/nginx/nginx.conf.tpl .docker/web/nginx/nginx.conf; fi; \
-	if [ ! -f .docker/web/apache/apache.conf ]; then cp .docker/web/apache/apache.conf.tpl .docker/web/apache/apache.conf; fi; \
-	sed -i "s/\s*server_name ##vhost##/    server_name $(VHOST)/g" .docker/web/nginx/nginx.conf; \
-	sed -i "s/##vhost##/$(VHOST)/g" .docker/web/apache/apache.conf; \
-	echo -e "$(GREEN)Webserver configuration success.$(NC)"
+	@cp .docker/web/nginx/nginx.conf.tpl .docker/web/nginx/nginx.conf
+	@cp .docker/web/apache/apache.conf.tpl .docker/web/apache/apache.conf
+	@sed -i "s/##vhost##/$(VHOST)/g" .docker/web/nginx/nginx.conf
+	@sed -i "s/##vhost##/$(VHOST)/g" .docker/web/apache/apache.conf
+	@echo -e "$(GREEN)Webserver configuration success.$(NC)"
 _docker: # Rebuild images and restart all Docker services
-	$(call main_title,Start docker)
+	$(call title,Start docker)
 	@${MAKE} down
 	@-$(DOCKER_COMPOSE) pull --parallel --quiet --ignore-pull-failures 2> /dev/null
 	@$(DOCKER_COMPOSE) build
@@ -253,7 +254,7 @@ _setup-symfony-app: # Create the Symfony application in ./app
 				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "cd /var/www/html && symfony new . --webapp --no-git"; \
 			elif [ $(SYMFONY_VERSION) = "lts" ]; then \
 				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "cd /var/www/html && symfony new . --version=$(SYMFONY_VERSION) --webapp --no-git"; \
-			else
+			else \
 				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "cd /var/www/html && symfony new . --version='$(SYMFONY_VERSION)' --webapp --no-git"; \
 			fi; \
 			if [ $(WEB_SERVER) = "apache" ]; then \
@@ -294,7 +295,7 @@ _setup-assets: # Configures assets (Asset Mapper or Webpack Encore) according to
 			else \
 				echo 'COMPOSE_PROFILES=redis,node' >> .env; \
 			fi; \
-			compose up -d --build node; \
+			$(DOCKER_COMPOSE) up -d --build node; \
 			$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "set -e; cd /var/www/html; composer require symfony/webpack-encore-bundle"; \
 			$(DOCKER_COMPOSE_RUN) --rm node $(WITH_BASH) "set -e && cd /var/www/html && if [ -f package.json ]; then echo package.json exists; else npm init -y; fi"; \
 			$(DOCKER_COMPOSE_RUN) --rm node $(WITH_BASH) "set -e && cd /var/www/html && npm install --save-dev @symfony/webpack-encore webpack webpack-cli core-js regenerator-runtime"; \

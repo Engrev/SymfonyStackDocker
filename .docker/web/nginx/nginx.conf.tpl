@@ -11,6 +11,7 @@ server {
     gzip_min_length 256;
 
     # Security: deny access to hidden files and sensitive dirs
+    client_max_body_size 20M;
     location ~ /\.(?!well-known).* { deny all; }
     location ~* /(?:app|var|vendor)/ { deny all; }
 

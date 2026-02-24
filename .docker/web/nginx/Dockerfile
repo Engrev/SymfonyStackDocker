@@ -1,4 +1,4 @@
-FROM nginx:1.25-alpine
+FROM nginx:1.29-alpine
 
 # Ajouter les packages nécessaires pour le debugging et la sécurité
 RUN apk add --no-cache curl
@@ -12,7 +12,7 @@ RUN mkdir -p /var/www/html/public && \
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://${VHOST}:${WEB_PORT}/ || exit 1
+    CMD curl -f http://localhost/ || exit 1
 
 EXPOSE 80
 

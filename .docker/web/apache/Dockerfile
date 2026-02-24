@@ -17,7 +17,7 @@ RUN set -eux \
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://${VHOST}:${WEB_PORT}/ || exit 1
+    CMD curl -f http://localhost/ || exit 1
 
 EXPOSE 80
 

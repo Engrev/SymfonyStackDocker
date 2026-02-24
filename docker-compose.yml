@@ -23,15 +23,11 @@ services:
             - composer_cache:/composer/cache
         networks:
             - internal
-        healthcheck:
-            test: [ "CMD-SHELL", "php-fpm -t || exit 1" ]
-            interval: 30s
-            timeout: 10s
-            retries: 3
     
     web-nginx:
         profiles: [ "nginx" ]
         container_name: ${PROJECT_SLUG}-web
+        restart: unless-stopped
         build:
             context: .
             dockerfile: .docker/web/nginx/Dockerfile
@@ -52,7 +48,7 @@ services:
             - NGINX_HOST=${VHOST}
             - NGINX_PORT=80
         healthcheck:
-            test: [ "CMD-SHELL", "curl -f http://${VHOST}:${WEB_PORT}/ || exit 1" ]
+            test: [ "CMD-SHELL", "curl -f http://localhost/ || exit 1" ]
             interval: 30s
             timeout: 10s
             retries: 3
@@ -60,6 +56,7 @@ services:
     web-apache:
         profiles: [ "apache" ]
         container_name: ${PROJECT_SLUG}-web
+        restart: unless-stopped
         build:
             context: .
             dockerfile: .docker/web/apache/Dockerfile
@@ -80,13 +77,14 @@ services:
             - APACHE_HOST=${VHOST}
             - APACHE_PORT=80
         healthcheck:
-            test: [ "CMD-SHELL", "curl -f http://${VHOST}:${WEB_PORT}/ || exit 1" ]
+            test: [ "CMD-SHELL", "curl -f http://localhost/ || exit 1" ]
             interval: 30s
             timeout: 10s
             retries: 3
     
     db:
         container_name: ${PROJECT_SLUG}-db
+        restart: unless-stopped
         image: ${DB_IMAGE}
         environment:
             # Postgres envs (ignored by MySQL image)
@@ -106,13 +104,15 @@ services:
         networks:
             - internal
         healthcheck:
-            test: ["CMD", 'mysqladmin', 'ping', '-h', 'localhost', '-u$$APP_DB_USER', '-p$$APP_DB_PASSWORD' ]
+            test: ["CMD-SHELL", "mysqladmin ping -h localhost -u$${APP_DB_USER} -p$${APP_DB_PASSWORD}"]
             interval: 30s
             timeout: 10s
             retries: 3
     
     phpmyadmin:
+        profiles: [ "pma" ]
         container_name: ${PROJECT_SLUG}-phpmyadmin
+        restart: unless-stopped
         image: phpmyadmin/phpmyadmin
         depends_on:
             db:
@@ -131,7 +131,7 @@ services:
         networks:
             - internal
         healthcheck:
-            test: [ "CMD-SHELL", "wget -qO- http://${VHOST}:${PMA_PORT}/ || exit 1" ]
+            test: [ "CMD-SHELL", "wget -qO- http://localhost/ || exit 1" ]
             interval: 30s
             timeout: 10s
             retries: 3
@@ -139,7 +139,8 @@ services:
     redis:
         profiles: [ "redis" ]
         container_name: ${PROJECT_SLUG}-redis
-        image: redis:7-alpine
+        restart: unless-stopped
+        image: redis:8.6-alpine
         ports:
             - "${REDIS_PORT}:6379"
         networks:
@@ -170,6 +171,7 @@ services:
     mailpit:
         profiles: [ "mailpit" ]
         container_name: ${PROJECT_SLUG}-mailpit
+        restart: unless-stopped
         image: axllent/mailpit:latest
         ports:
             - "1025:1025" # SMTP
@@ -177,7 +179,7 @@ services:
         networks:
             - internal
         healthcheck:
-            test: [ "CMD-SHELL", "wget -qO- http://${VHOST}:8025/ || exit 1" ]
+            test: [ "CMD-SHELL", "wget -qO- http://localhost:8025/ || exit 1" ]
             interval: 30s
             timeout: 10s
             retries: 3
