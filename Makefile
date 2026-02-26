@@ -276,7 +276,7 @@ _setup-symfony-app: # Create the Symfony application in ./app
 	@cp -r .docker/github/workflows app/.github/
 _setup-assets: # Configures assets (Asset Mapper or Webpack Encore) according to the selection
 	$(call title,Setup Assets)
-	@if [ $(ASSETS) = "encore" ]; then \
+	@if [ $(ASSETS) = "webpack" ]; then \
 		echo -e "$(BLUE)Setting up Webpack Encore...$(NC)"; \
 		$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "set -e; cd /var/www/html; composer require symfony/webpack-encore-bundle"; \
 		$(DOCKER_COMPOSE_RUN) --rm node $(WITH_BASH) "set -e && cd /var/www/html && if [ -f package.json ]; then echo package.json exists; else npm init -y; fi"; \
