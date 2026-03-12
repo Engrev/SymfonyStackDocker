@@ -1,178 +1,146 @@
-# Dockerized Symfony Project Scaffold 🚀  
-*(Makefile-driven bootstrapper for rapid Symfony development)*  
+# 🚀 Symfony Stack Docker
 
-This repository provides an **interactive `make init` wizard** to quickly bootstrap a fully containerized Symfony project.  
-It is designed for **developers, teams, and CI pipelines**, supporting flexible configurations:  
-
-- **Web server**: Nginx *(default)* or Apache  
-- **Database**: PostgreSQL *(default)* or MySQL  
-- **Cache/Session**: Redis *(optional)*  
-- **Frontend**: Asset Mapper *(default)* or Webpack Encore (with Node.js)  
-
-Symfony is automatically installed in `./app`.  
+**SymfonyStackDocker** is a complete development foundation for Symfony projects, driven by an interactive assistant via a `Makefile`. It allows you to launch a containerized Symfony project in seconds, with pre-configured production and pre-production environments.
 
 ---
 
-## 🛠 Requirements  
+## 🌟 Highlights
 
-- Docker Desktop 4.x+  
-- Docker Compose V2 (`docker compose`)  
-- GNU Make  
-- Bash shell (Linux/macOS, or Git Bash/WSL on Windows)  
-
-⚠️ **Windows users:**  
-- Run commands inside Git Bash or WSL (not PowerShell/cmd).  
-- Hosts file updates may require elevation (PowerShell prompt or manual edit).  
-
----
-
-## ⚡ Quick Start  
-
-```bash
-    make init
-```
-
-The initializer will guide you through:  
-- **Project name**  
-- **Symfony version**: latest stable *(default)*, latest LTS, or custom string  
-- **Distribution**: Full *(webapp, default)* or API  
-- **Frontend assets**: Asset Mapper *(default)* or Webpack Encore  
-- **Web server**: Nginx *(default)* or Apache  
-- **Database**: PostgreSQL *(default)* or MySQL  
-- **Virtual host name** *(default: localhost)*  
-- **Ports**: web, DB, Redis (with conflict detection)  
-
-✅ Result:  
-- `.make.local` and `.env` created  
-- Symfony installed in `./app`  
-- Containers built & started  
-- Hosts file updated (if possible)  
-
-Access your app:  
-👉 http://<VHOST>:<WEB_PORT>  
-*(e.g., http://localhost:8080)*  
+- **🛠 Interactive Assistant**: A `make install` wizard guides you through project configuration (Vhost, DB, Symfony version, etc.).
+- **🐳 Multi-Stack Docker**:
+    - Choice of Web Server: **Nginx** or **Apache**.
+    - Choice of Database: **MariaDB** or **PostgreSQL**.
+    - Optional **Redis** support.
+- **📦 Asset Management**: Native support for **Asset Mapper** (modern) or **Webpack Encore** (classic).
+- **✅ Code Quality**: Pre-configured tooling (PHPStan, PHP-CS-Fixer, PHPUnit, TwigCS).
+- **🔎 Comprehensive Debugging**: Mailpit for emails, phpMyAdmin (if MariaDB), Xdebug ready to use.
+- **🚀 Deployment Ready**: Deployment scripts and standardized production directory structure.
 
 ---
 
-## 🧰 Common Commands  
+## 📋 Requirements
 
-| Command                                         | Description |
-|-------------------------------------------------|-------------|
-| `make up / make down / make restart`            | Start/stop/restart containers |
-| `make ps`                                       | List container status |
-| `make logs [SERVICE=php\|web\|db\|redis\|node]` | Show logs |
-| `make terminal`                                 | Open a shell in the PHP container |
-| `make composer ARGS="..."`                      | Run Composer inside container |
-| `make console ARGS="..."`                       | Run Symfony console |
-| `make cache-clear`                              | Clear Symfony cache |
-| `make migrate`                                  | Run Doctrine migrations (or fallback) |
-| `make fixtures`                                 | Load fixtures (or DB import) |
-| `make assets`                                   | Build assets (Encore or Asset Mapper) |
-| `make assets-watch`                             | Watch assets with Encore |
-| `make tests`                                    | Run PHPUnit |
-| `make xdebug-on / make xdebug-off`              | Toggle Xdebug |
-| `make clean`                                    | Remove containers & volumes |
-| `make reset`                                    | Full reset (remove `./app` & Node artifacts) |
+- **Docker** & **Docker Compose** V2
+- **GNU Make**
+- **Git Bash** (recommended for Windows) or WSL
+
+> ⚠️ **Windows Users**: Run all commands in a Git Bash or WSL terminal.
 
 ---
 
-## 🏗 Service Architecture  
+## ⚙️ Quick Installation
 
-```
-                ┌──────────────┐
-                │ Nginx/Apache │
-                │    (web)     │
-                └───────▲──────┘
-                        │
-                        │
-┌─────────────┐   ┌─────▼───────┐   ┌───────────┐
-│   PHP-FPM   │   │   Database  │   │   Redis   │
-│  (Symfony)  │   │ (Postgres/  │   │ (optional │
-│  Composer   │   │  MySQL)     │   │  cache)   │
-└───────▲─────┘   └──────▲──────┘   └────▲──────┘
-        │                │               │
-        │                │               │
-    ┌───▼─────────┐      │         ┌───────────┐
-    │   Node.js   │◄─────┘         │  Browser  │
-    │  (Encore)   │   Frontend     │  (Client) │
-    └─────────────┘   Assets       └───────────┘
-```
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/Engrev/SymfonyStackDocker.git my-project
+   cd my-project
+   ```
+
+2. **Launch the installation assistant**:
+   ```bash
+   make install
+   ```
+   The assistant will:
+   - Verify your Docker installation.
+   - Ask questions about your configuration (project name, Symfony version, DB type, etc.).
+   - Build Docker images and start containers.
+   - Install a new Symfony application in the `/app` folder.
+   - Install all development dependencies.
+   - Attempt to add your domain (e.g., `symfony.local`) to your `hosts` file.
+
+![installation](screenshots/install.png)
 
 ---
 
-## 📂 Project Structure  
+## 🧰 Essential Commands (Makefile)
 
-```
+### 🐳 Docker & Infrastructure
+| Command | Description |
+| :--- | :--- |
+| `make up` | Start containers in the background. |
+| `make down` | Stop and remove containers. |
+| `make restart` | Full restart (down + up). |
+| `make ps` | Show container status. |
+| `make logs` | Show logs for all services. |
+| `make terminal-php` | Enter the PHP container (as `www-data` user). |
+
+### 🎼 Symfony & Composer
+| Command | Description |
+| :--- | :--- |
+| `make console ARGS="..."` | Run a Symfony console command. |
+| `make composer ARGS="..."` | Run a Composer command. |
+| `make cc` | Clear the application cache. |
+
+### 🗄️ Database
+| Command | Description |
+| :--- | :--- |
+| `make db-migrate` | Run Doctrine migrations. |
+| `make db-fixtures` | Load fixtures. |
+| `make db-reset` | Reset the database (Drop, Create, Migrate). |
+| `make db-dump` | Create a SQL export in `var/dump.sql`. |
+| `make db-import` | Import `var/dump.sql` (or specified via `ARGS`). |
+
+### 🧪 Quality & Tests
+| Command | Description |
+| :--- | :--- |
+| `make tests` | Run the full test suite (Linters, PHPStan, PHPUnit). |
+| `make phpstan` | Run static analysis. |
+| `make php-cs-fixer` | Automatically fix coding standards. |
+| `make phpunit` | Run unit and functional tests. |
+
+---
+
+## 🏗 Project Structure
+
+```text
 .
-├── Makefile
-├── docker-compose.yml
-├── README.md
-├── .env                 # Symfony environment variables
-├── .make.local          # Saved init config
-├── app/                 # Symfony project
-└── .docker/
-    ├── php/
-    │   ├── Dockerfile
-    │   └── conf/{php.ini, xdebug.ini}
-    ├── web/
-    │   ├── nginx/       # Nginx configs/templates
-    │   └── apache/      # Apache configs/templates
-    └── node/
-        └── Dockerfile
+├── .docker/                # Docker configuration (PHP, Web, Node, etc.)
+├── app/                    # 📂 Symfony source code (generated at install)
+│   ├── src/                # Your controllers, entities, services...
+│   ├── templates/          # Twig views
+│   ├── public/             # Web entry point
+│   └── tests/              # Automated tests
+├── makefiles/              # Modular Makefile scripts
+├── docker-compose.yml      # Docker orchestration
+├── Makefile                # Automation entry point
+└── .env.docker             # Docker environment variables
 ```
 
 ---
 
-## 🔧 Configuration Files  
+## 🔍 Debugging & Tools
 
-- **.env** → Injected into containers (`docker-compose.yml`)  
-- **.make.local** → Stores init answers (project slug, DB defaults…)  
-- **.docker/** → Service definitions & config templates  
-
-Idempotent behavior:  
-- Existing configs are preserved  
-- Ports checked before assignment  
-- Symfony reused unless reset  
-
----
-
-## 🎨 Asset Mapper vs Webpack Encore  
-
-- **Asset Mapper** *(default)*: lightweight, modern.  
-- **Encore**: automatically selected if Asset Mapper unsupported. Enables `node` profile.  
+- **Mailpit**: Interception of emails sent by the app.
+  - Access: `http://<vhost>:8025`
+- **phpMyAdmin**: DB management (if MariaDB).
+  - Access: `http://<vhost>:<configured_port>` (default 8081).
+- **Xdebug**: Already installed, disabled by default.
+  - `make xdebug-on` / `make xdebug-off`
+- **Redis**: Optional support.
+  - `make redis-on` / `make redis-off`
 
 ---
 
-## ⚙️ Environment Variables  
+## 🚀 Deployment
 
-Generated `app/.env.local` includes:  
-- `APP_ENV=dev`  
-- `APP_DEBUG=1`  
-- `APP_URL`  
-- `TRUSTED_PROXIES`, `TRUSTED_HOSTS`  
-- `DATABASE_URL`  
-- `REDIS_URL` (if enabled)  
+The project is designed for secure and professional deployment:
+1. **Server Structure**: Uses a `releases/` and symbolic link (`current/`) system for zero-downtime deployments.
+2. **Included Scripts**: `activate_release.sh` and `rollback.sh` to automate production rollouts.
+3. **GitHub Actions**: Ready-to-use workflow for SSH deployment with deploy keys.
 
----
-
-## 🐛 Troubleshooting  
-
-- **Port conflicts** → choose another port, update `.env`, `make restart`  
-- **Hosts file not updated** → manually add `127.0.0.1 <vhost>`  
-- **Composer memory issues** → increase memory in `.docker/php/conf/php.ini`  
-- **Xdebug issues** → check IDE listening on `9003`, toggle with `make xdebug-on`  
-- **Windows file permissions** → ensure host user `uid=1000`, or adjust Dockerfile  
+Check the [**PROCESS.md**](DEPLOYING.md) file for the detailed step-by-step production setup guide.
 
 ---
 
-## 🤖 CI/CD Usage  
+## 🧹 Cleanup & Reset
 
-- Use `docker compose --profile ... up` to start only required services  
-- Composer cache persisted in named volume (`<slug>_composer_cache`) for faster builds  
+- `make reset`: Deletes the `/app` folder, generated configurations, and containers. Allows you to start fresh with `make install`.
 
 ---
 
-## 📜 License  
+## 📄 License
 
-MIT License. Free to use, modify, and share.
+This project is licensed under the MIT License. You are free to use and modify it.
 
+---
+*Built with ❤️ to simplify Symfony development.*

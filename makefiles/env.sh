@@ -1,0 +1,255 @@
+#!/usr/bin/env bash
+## ════════════════════════════════════════════════════════════════
+##  📄 env.sh — Configuration des variables d'environnement
+##  Génère le fichier .env.docker de manière interactive
+## ════════════════════════════════════════════════════════════════
+set -euo pipefail
+
+# ── Couleurs ─────────────────────────────────────────────────────
+RESET='\033[0m'
+BOLD='\033[1m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+BLUE='\033[0;34m'
+
+# ── Helpers ───────────────────────────────────────────────────────
+success() { printf "${GREEN}✅ %b\n" "$1"; }
+warning() { printf "${YELLOW}⚠️ %b\n" "$1"; }
+info()    { printf "${CYAN}ℹ️ %b\n" "$1"; }
+title() {
+    local msg="${1:-Make target}"
+    local line2="|     $msg     |"
+    local len=${#line2}
+    local dashes=""
+    for i in $(seq 1 $((len-2))); do
+        dashes="${dashes}="
+    done
+    local line1="+$dashes+"
+    echo -e "\n${BOLD}${BLUE}${line1}"
+    echo "${line2}"
+    echo -e "${line1}${RESET}"
+}
+
+slugify() {
+    echo "$1" \
+        | tr '[:upper:]' '[:lower:]' \
+        | sed 's/[^a-z0-9-]/-/g' \
+        | sed 's/--*/-/g' \
+        | sed 's/^-//;s/-$//'
+}
+
+# ── Valeurs par défaut ────────────────────────────────────────────
+DEFAULT_WEB_PORT=8080
+DEFAULT_DB_PORT_MARIADB=3306
+DEFAULT_DB_PORT_POSTGRES=5432
+DEFAULT_PMA_PORT=8081
+DEFAULT_PHP_VERSION="8.2"
+DEFAULT_REDIS_PORT=6379
+ENV_FILE=".env.docker"
+
+# ════════════════════════════════════════════════════════════════
+#  File already exists ?
+# ════════════════════════════════════════════════════════════════
+if [ -f "$ENV_FILE" ]; then
+    info "Le fichier $ENV_FILE existe déjà."
+    exit 0
+fi
+
+printf "It will write configuration to ${BOLD}.env.docker${RESET}. "
+printf "You can edit this file later to adjust settings.\n\n"
+
+# ════════════════════════════════════════════════════════════════
+#  User IDs
+# ════════════════════════════════════════════════════════════════
+user_id=$(id -u)
+group_id=$(id -g)
+
+# ════════════════════════════════════════════════════════════════
+# Application environment
+# ════════════════════════════════════════════════════════════════
+read -r -p "App environment [dev (default) / prod] : " app_env
+if [ "$app_env" != "dev" ] && [ "$app_env" != "prod" ]; then
+    app_env="dev"
+fi
+
+if [ "$app_env" = "prod" ]; then
+    profiles=""
+else
+    profiles="mailpit"
+fi
+
+# ════════════════════════════════════════════════════════════════
+#  Project name
+# ════════════════════════════════════════════════════════════════
+read -r -p "Project name [My Symfony App] : " project_name
+if [ -z "$project_name" ]; then
+    project_name="My Symfony App"
+fi
+
+project_slug=$(slugify "$project_name")
+default_vhost="${project_slug}.docker"
+
+# ════════════════════════════════════════════════════════════════
+#  Symfony version
+# ════════════════════════════════════════════════════════════════
+read -r -p "Symfony version [latest stable (stable, default) / latest LTS (lts) / custom (e.g. 7.1.*)] : " symfony_version
+if [ -z "$symfony_version" ]; then
+    symfony_version="stable"
+fi
+
+# ════════════════════════════════════════════════════════════════
+#  Distribution
+# ════════════════════════════════════════════════════════════════
+read -r -p "Distribution [webapp (default) / api] : " distribution
+if [ "$distribution" != "webapp" ] && [ "$distribution" != "api" ]; then
+    distribution="webapp"
+fi
+
+# ════════════════════════════════════════════════════════════════
+#  Assets frontend
+# ════════════════════════════════════════════════════════════════
+read -r -p "Front-end assets [mapper (default) / webpack] : " assets
+if [ "$assets" != "mapper" ] && [ "$assets" != "webpack" ]; then
+    assets="mapper"
+fi
+
+profiles+=",$assets"
+
+if [ "$assets" = "webpack" ]; then profiles+=",node"; fi
+
+# ════════════════════════════════════════════════════════════════
+#  Web server
+# ════════════════════════════════════════════════════════════════
+read -r -p "Web server [nginx (default) / apache] : " webserver
+if [ "$webserver" != "nginx" ] && [ "$webserver" != "apache" ]; then
+    webserver="nginx"
+fi
+
+profiles+=",$webserver"
+
+# ════════════════════════════════════════════════════════════════
+#  Database engine
+# ════════════════════════════════════════════════════════════════
+read -r -p "Database [mariadb (default) / postgres] : " database
+if [ "$database" != "postgres" ] && [ "$database" != "mariadb" ]; then
+    database="mariadb"
+fi
+
+if [ "$database" = "mariadb" ]; then
+    profiles+=",mariadb"
+    db_internal_port="$DEFAULT_DB_PORT_MARIADB"
+    db_port_default="$DEFAULT_DB_PORT_MARIADB"
+else
+    profiles+=",postgres"
+    db_internal_port="$DEFAULT_DB_PORT_POSTGRES"
+    db_port_default="$DEFAULT_DB_PORT_POSTGRES"
+fi
+
+# ════════════════════════════════════════════════════════════════
+#  Virtual host
+# ════════════════════════════════════════════════════════════════
+read -r -p "Virtual host [$default_vhost] : " virtual_host
+if [ -z "$virtual_host" ]; then
+    virtual_host="$default_vhost"
+fi
+
+# ════════════════════════════════════════════════════════════════
+#  Ports
+# ════════════════════════════════════════════════════════════════
+read -r -p "HTTP external port [$DEFAULT_WEB_PORT] : " web_external_port
+if [ -z "$web_external_port" ]; then
+    web_external_port="$DEFAULT_WEB_PORT"
+fi
+
+read -r -p "Database external port [$db_port_default] : " db_external_port
+if [ -z "$db_external_port" ]; then
+    db_external_port="$db_port_default"
+fi
+
+# ════════════════════════════════════════════════════════════════
+#  PHP
+# ════════════════════════════════════════════════════════════════
+read -r -p "PHP version [8.4 (latest stable) / 8.3 / 8.2 (default) / custom (e.g. 8.1)] : " php_version
+if [ -z "$php_version" ]; then
+    php_version="$DEFAULT_PHP_VERSION"
+fi
+
+# ════════════════════════════════════════════════════════════════
+#  Redis
+# ════════════════════════════════════════════════════════════════
+read -r -p "Do you want to install Redis ? [y/n] : " install_redis
+if [ "$install_redis" = "y" ] || [ "$install_redis" = "Y" ]; then
+    read -r -p "Redis host port [$DEFAULT_REDIS_PORT] : " redis_external_port
+    if [ -z "$redis_external_port" ]; then
+        redis_external_port="$DEFAULT_REDIS_PORT"
+    fi
+    profiles+=",redis"
+else
+    redis_external_port=""
+fi
+
+# ════════════════════════════════════════════════════════════════
+#  Xdebug
+# ════════════════════════════════════════════════════════════════
+read -r -p "Do you want to enable Xdebug ? [y/n] : " enable_xdebug
+if [ "$enable_xdebug" = "y" ] || [ "$enable_xdebug" = "Y" ]; then
+    xdebug_mode="debug,develop"
+else
+    xdebug_mode="off"
+fi
+
+# ════════════════════════════════════════════════════════════════
+#  Writing the .env.docker file
+# ════════════════════════════════════════════════════════════════
+{
+    echo "USER_ID=$user_id"
+    echo "GROUP_ID=$group_id"
+    echo "APP_ENV=$app_env"
+    echo "PROJECT_NAME=$project_name"
+    echo "PROJECT_SLUG=$project_slug"
+    echo "SYMFONY_VERSION=$symfony_version"
+    echo "DIST=$distribution"
+    echo "ASSETS=$assets"
+    echo "WEB_SERVER=$webserver"
+    echo "VHOST=$virtual_host"
+    echo "WEB_EXTERNAL_PORT=$web_external_port"
+    echo "DB_INTERNAL_PORT=$db_internal_port"
+    echo "DB_EXTERNAL_PORT=$db_external_port"
+    if [ "$database" = "mariadb" ]; then
+        echo "PMA_EXTERNAL_PORT=$DEFAULT_PMA_PORT"
+    fi
+    echo "APP_DB_NAME=$project_slug"
+    echo "APP_DB_USER=$project_slug"
+    echo "APP_DB_PASSWORD=$project_slug"
+    echo "PHP_VERSION=$php_version"
+    echo "XDEBUG_MODE=$xdebug_mode"
+    echo "REDIS_EXTERNAL_PORT=$redis_external_port"
+    echo "INSTALL_SYMFONY_CLI=1"
+    echo "COMPOSE_PROFILES=$profiles"
+} > "$ENV_FILE"
+
+# ════════════════════════════════════════════════════════════════
+#  Display and Confirmation
+# ════════════════════════════════════════════════════════════════
+title "Contenu de .env.docker :"
+cat "$ENV_FILE"
+printf "\n\n"
+
+read -r -p "Do you approve of it ? [y/n] : " approve
+
+if [ "$approve" = "n" ] || [ "$approve" = "N" ]; then
+    warning "Cancellation — deletion of $ENV_FILE..."
+    rm -f "$ENV_FILE"
+    success "Configuration not approved. Please run 'make install' again to configure the project."
+    exit 0
+fi
+
+success "Configuration saved to ${BOLD}$ENV_FILE${RESET}."
+
+# ── Symlink to .env for Docker Compose auto-loading ───────────────
+if [ -f "$ENV_FILE" ]; then
+    ln -sf "$ENV_FILE" .env
+    success "Environment file symlinked to ${BOLD}.env${RESET}${GREEN} for Docker Compose auto-loading."
+fi

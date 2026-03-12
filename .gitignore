@@ -1,7 +1,7 @@
 .idea
-.docker/web/apache/apache.conf
-.docker/web/nginx/nginx.conf
+.docker/web/apache/vhost.conf
+.docker/web/nginx/vhost.conf
 app
-data
+var
 .env
-.make.local
+.env.docker
