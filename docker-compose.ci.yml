@@ -1,0 +1,99 @@
+## ════════════════════════════════════════════════════════════════
+## docker-compose.ci.yml — CI Stack (automated tests)
+## Usage: docker compose -f docker-compose.ci.yml --env-file .env.ci ...
+##
+## Differences vs docker-compose.yml (dev):
+## - No web server (unnecessary for tests)
+## - No Mailpit, phpMyAdmin, pgAdmin
+## - No ports exposed on the host (internal network only)
+## - Frozen image versions (reproducibility)
+## - Xdebug off, Symfony CLI not installed
+## - More aggressive healthchecks (interval 5s) to reduce waiting time
+## - Shared Composer cache between runs
+## ════════════════════════════════════════════════════════════════
+name: ${PROJECT_SLUG:-symfony-app}-ci
+
+services:
+    php:
+        container_name: ${PROJECT_SLUG:-symfony-app}-php-ci
+        build:
+            context: .
+            dockerfile: .docker/php/Dockerfile
+            args:
+                PHP_VERSION: ${PHP_VERSION:-8.2}
+                USER_ID: 1000
+                GROUP_ID: 1000
+        environment:
+            APP_ENV: test
+            COMPOSER_CACHE_DIR: /composer/cache
+            XDEBUG_MODE: off
+            INSTALL_SYMFONY_CLI: 0
+            DATABASE_URL: ${CI_DATABASE_URL}
+        volumes:
+            - ./app:/var/www/html
+            - ./.docker/php/conf/php.ini:/usr/local/etc/php/conf.d/99-symfony.ini:ro
+            - ./.docker/php/conf/opcache.ini:/usr/local/etc/php/conf.d/98-opcache.ini:ro
+            - ./.docker/php/conf/apcu.ini:/usr/local/etc/php/conf.d/97-apcu.ini:ro
+            - composer_cache_ci:/composer/cache
+        depends_on:
+            db-mariadb:
+                condition: service_healthy
+                required: false
+            db-postgres:
+                condition: service_healthy
+                required: false
+        networks:
+            - ci
+        healthcheck:
+            test: ["CMD-SHELL", "SCRIPT_NAME=/ping SCRIPT_FILENAME=/ping cgi-fcgi -bind -connect 127.0.0.1:9000 || exit 1"]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+            start_period: 10s
+
+    db-mariadb:
+        profiles: ["ci-mariadb"]
+        container_name: ${PROJECT_SLUG:-symfony-app}-db-ci
+        image: mariadb:11.8.6
+        environment:
+            MYSQL_DATABASE: ${APP_DB_NAME:-app_test}
+            MYSQL_USER: ${APP_DB_USER:-app_test}
+            MYSQL_PASSWORD: ${APP_DB_PASSWORD:-app_test}
+            MYSQL_ROOT_PASSWORD: ${APP_DB_PASSWORD:-app_test}
+        networks:
+            - ci
+        healthcheck:
+            test: ["CMD", "healthcheck.sh", "--su-mysql", "--connect", "--innodb_initialized"]
+            interval: 5s
+            timeout: 5s
+            retries: 15
+            start_period: 15s
+        tmpfs:
+            - /var/lib/mysql   # RAM Data: Faster startup in CI
+
+    db-postgres:
+        profiles: ["ci-postgres"]
+        container_name: ${PROJECT_SLUG:-symfony-app}-db-ci
+        image: postgres:18.3-alpine
+        environment:
+            POSTGRES_DB: ${APP_DB_NAME:-app_test}
+            POSTGRES_USER: ${APP_DB_USER:-app_test}
+            POSTGRES_PASSWORD: ${APP_DB_PASSWORD:-app_test}
+        networks:
+            - ci
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${APP_DB_USER:-app_test} -d ${APP_DB_NAME:-app_test}"]
+            interval: 5s
+            timeout: 5s
+            retries: 15
+        tmpfs:
+            - /var/lib/postgresql/data  # RAM Data: faster boot in CI
+
+networks:
+    ci:
+        driver: bridge
+        name: ${PROJECT_SLUG:-symfony-app}_ci_net
+
+volumes:
+    composer_cache_ci:
+        name: ${PROJECT_SLUG:-symfony-app}_composer_cache_ci

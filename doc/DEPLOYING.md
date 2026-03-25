@@ -108,7 +108,7 @@ Exemples d'utilisation des scripts :
 ## Sur l'hébergeur
 
 16. Créer le sous-domaine/domaine pour le projet et définir le chemin des fichiers sur **/<dossier_du_projet>/current/public/**.
-17. Si le serveur fonctionne sous apache et qu'apache n'est pas défini en tant que webserver lors de l'installation du projet (en local), rajouter le [**.htaccess**](.docker/web/apache/.htaccess).
+17. Si le serveur fonctionne sous apache et qu'apache n'est pas défini en tant que webserver lors de l'installation du projet (en local), rajouter le [**.htaccess**](../.docker/web/apache/.htaccess).
 18. Tester d'accéder à votre sous-domaine/domaine.
 
 ## Ensuite, pour les prochaines PR

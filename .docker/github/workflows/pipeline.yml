@@ -1,3 +1,39 @@
+## ════════════════════════════════════════════════════════════════
+##  .github/workflows/pipeline.yml
+##
+##  Jobs :
+##    ci            → lint + tests in Docker
+##    deploy-pprod  → Deploy to pprod (on release push)
+##    deploy-prod   → Deploy to prod  (on main push, after approval)
+##
+##  To change the PHP version or the DB:
+##    Modify the variables in the "env:" section below.
+##    The deploy jobs automatically use these values.
+##
+##  GitHub Actions Limitation:
+##    Root env: variables are NOT readable in
+##    "strategy: matrix:". Matrix values are therefore
+##    duplicated (see comment in the job above).
+##
+##  Required Secrets:
+##    DEPLOY_KEY            ed25519 private SSH key
+##    DEPLOY_HOST           SSH host of the server
+##    DEPLOY_USER           SSH user
+##    DEPLOY_BASE_PATH      Base path on the server
+##    SMTP_SERVER           SMTP server
+##    SMTP_PORT             SMTP port
+##    SMTP_USERNAME         SMTP username
+##    SMTP_PASSWORD         SMTP password
+##    CODECOV_TOKEN         (optional) Codecov token
+##
+##  Required Variables:
+##    MAIL_TO               Notification recipient
+##    MAIL_FROM             Notification sender
+##    DOMAIN_PROD           Prod domain (e.g., my-project.com)
+##    DOMAIN_PPROD          Pprod domain (e.g., pprod.my-project.com)
+##    SERVER_PHP_BIN        PHP path on the server (e.g., /opt/php8.4/bin/php)
+##    SERVER_COMPOSER_BIN   Composer path on the server
+## ════════════════════════════════════════════════════════════════
 name: CI/CD
 
 on:
@@ -11,77 +47,270 @@ on:
             - perf/**
             - test/**
             - core/**
+            - release
+            - main
     pull_request:
         branches:
             - release
             - main
 
+concurrency:
+    group: pipeline-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    PHP_VERSION: "8.2"
+    DB_ENGINE: "mariadb"
+    DB_COMPOSE_PROFILE: "ci-mariadb"
+    DB_PORT: "3306"
+    DB_URL: "mysql://app_test:app_test_pass@db-mariadb:3306/app_test?serverVersion=11.8.6-MariaDB&charset=utf8mb4"
+    PROJECT_SLUG: "symfony-app"
+    APP_DB_NAME: "app_test"
+    APP_DB_USER: "app_test"
+    APP_DB_PASSWORD: "app_test_pass"
+
 jobs:
     ci:
-        name: CI (lint + tests)
+        name: "CI — PHP ${{ matrix.php-version }} / ${{ matrix.db }}"
         runs-on: ubuntu-latest
+        
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    # Values to keep synchronized with env: above.
+                    # GitHub Actions does not allow ${{ env.* }} in matrix:.
+                    - php-version: "8.2"
+                      db: "mariadb"
+                      compose-profile: "ci-mariadb"
+                      db-port: "3306"
+                      db-url: "mysql://app_test:app_test_pass@db-mariadb:3306/app_test?serverVersion=11.8.6-MariaDB&charset=utf8mb4"
+                    
+                    # Décommentez pour PHP 8.3 :
+                    # - php-version: "8.3"
+                    #   db: "mariadb"
+                    #   compose-profile: "ci-mariadb"
+                    #   db-port: "3306"
+                    #   db-url: "mysql://app_test:app_test_pass@db-mariadb:3306/app_test?serverVersion=11.8.6-MariaDB&charset=utf8mb4"
+                    
+                    # Décommentez pour PostgreSQL :
+                    # - php-version: "8.2"
+                    #   db: "postgres"
+                    #   compose-profile: "ci-postgres"
+                    #   db-port: "5432"
+                    #   db-url: "postgresql://app_test:app_test_pass@db-postgres:5432/app_test?serverVersion=18.3&charset=utf8"
+        
         steps:
-            - uses: actions/checkout@v4
-
-            - name: Set up PHP
-              uses: shivammathur/setup-php@v2
+            
+            - name: "Checkout"
+              uses: actions/checkout@v4
+            
+            - name: "Set up Docker Buildx"
+              uses: docker/setup-buildx-action@v3
+            
+            - name: "Cache Docker layers"
+              uses: actions/cache@v4
               with:
-                  php-version: '8.4'
-                  extensions: mbstring, pdo_mysql, intl, curl, xml, zip
-                  coverage: none
-
-            - name: Install dependencies
-              run: composer install --no-dev --no-progress --no-suggest --prefer-dist --optimize-autoloader
-
-            - name: Lint YAML/Twig
+                  path: /tmp/.buildx-cache
+                  key: ${{ runner.os }}-buildx-php${{ matrix.php-version }}-${{ hashFiles('.docker/php/Dockerfile') }}
+                  restore-keys: |
+                      ${{ runner.os }}-buildx-php${{ matrix.php-version }}-
+                      ${{ runner.os }}-buildx-
+            
+            - name: "Cache Composer"
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.composer/cache
+                      app/vendor
+                  key: ${{ runner.os }}-composer-php${{ matrix.php-version }}-${{ hashFiles('app/composer.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-composer-php${{ matrix.php-version }}-
+                      ${{ runner.os }}-composer-
+            
+            - name: "Generate .env.ci"
               run: |
-                  php bin/console lint:yaml config || true
-                  php bin/console lint:twig templates || true
-
-            - name: Run tests
-              run: php bin/phpunit
-
-    deploy:
-        name: Deploy
+                  cat > .env.ci <<EOF
+                  PROJECT_SLUG=${{ env.PROJECT_SLUG }}
+                  PHP_VERSION=${{ matrix.php-version }}
+                  COMPOSE_PROFILES=${{ matrix.compose-profile }}
+                  APP_DB_NAME=${{ env.APP_DB_NAME }}
+                  APP_DB_USER=${{ env.APP_DB_USER }}
+                  APP_DB_PASSWORD=${{ env.APP_DB_PASSWORD }}
+                  DB_INTERNAL_PORT=${{ matrix.db-port }}
+                  CI_DATABASE_URL=${{ matrix.db-url }}
+                  EOF
+            
+            - name: "Build PHP CI image"
+              run: make ci-build
+              env:
+                  DOCKER_BUILDKIT: 1
+                  BUILDX_CACHE_FROM: type=local,src=/tmp/.buildx-cache
+                  BUILDX_CACHE_TO: type=local,dest=/tmp/.buildx-cache-new,mode=max
+            
+            - name: "Rotate Buildx cache"
+              run: |
+                  rm -rf /tmp/.buildx-cache
+                  mv /tmp/.buildx-cache-new /tmp/.buildx-cache 2>/dev/null || true
+            
+            - name: "Start CI containers"
+              run: make ci-up
+            
+            - name: "Install Composer dependencies"
+              run: make ci-install
+            
+            - name: "Run migrations"
+              run: make ci-migrate
+            
+            - name: "PHP CS Fixer"
+              run: make ci-cs-check
+            
+            - name: "PHPStan"
+              run: make ci-phpstan
+            
+            - name: "Lint YAML"
+              run: make ci-lint-yaml
+            
+            - name: "Lint Twig"
+              run: make ci-lint-twig
+            
+            - name: "Lint Container"
+              run: make ci-lint-container
+            
+            - name: "PHPUnit"
+              run: make ci-test
+            
+            - name: "Coverage (main only)"
+              if: github.ref == 'refs/heads/main'
+              run: make ci-coverage-clover
+            
+            - name: "Upload to Codecov"
+              if: github.ref == 'refs/heads/main'
+              uses: codecov/codecov-action@v4
+              with:
+                  files: app/var/coverage/clover.xml
+                  fail_ci_if_error: false
+              env:
+                  CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+            
+            - name: "Security audit"
+              run: make ci-security
+            
+            - name: "Stop CI containers"
+              if: always()
+              run: make ci-down
+            
+            - name: "Upload logs on failure"
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: "logs-php${{ matrix.php-version }}-${{ matrix.db }}"
+                  path: |
+                      app/var/log/
+                      app/var/coverage/
+                  retention-days: 7
+            
+            - name: "Notify CI failure"
+              if: failure()
+              uses: dawidd6/action-send-mail@v3
+              with:
+                  server_address: ${{ secrets.SMTP_SERVER }}
+                  server_port: ${{ secrets.SMTP_PORT }}
+                  username: ${{ secrets.SMTP_USERNAME }}
+                  password: ${{ secrets.SMTP_PASSWORD }}
+                  subject: "❌ [${{ github.ref_name }}] CI échoué — PHP ${{ matrix.php-version }} / ${{ matrix.db }}"
+                  to: ${{ vars.MAIL_TO }}
+                  from: ${{ vars.MAIL_FROM }}
+                  body: |
+                      Repository  : ${{ github.repository }}
+                      Branche     : ${{ github.ref_name }}
+                      Commit      : ${{ github.sha }}
+                      Auteur      : ${{ github.actor }}
+                      Matrix      : PHP ${{ matrix.php-version }} / ${{ matrix.db }}
+                      Voir le run : ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    
+    deploy-pprod:
+        name: "Deploy → pprod"
         needs: ci
         runs-on: ubuntu-latest
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release'
+        if: |
+            github.event_name == 'push' &&
+            github.ref == 'refs/heads/release'
+        
+        environment:
+            name: preproduction
+            url: https://${{ vars.DOMAIN_PPROD }}
+        
         steps:
-            - uses: actions/checkout@v4
-
-            - name: Generate release name
-              run: echo "RELEASE_NAME=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_ENV
-
-            - name: Set deployment date as env var
-              run: echo "DEPLOY_DATE=${{ github.run_started_at }}" >> $GITHUB_ENV
-
-            - name: Setup SSH
+            
+            - name: "Checkout"
+              uses: actions/checkout@v4
+            
+            - name: "Cache Composer"
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.composer/cache
+                      app/vendor
+                  key: ${{ runner.os }}-composer-php${{ env.PHP_VERSION }}-${{ hashFiles('app/composer.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-composer-php${{ env.PHP_VERSION }}-
+                      ${{ runner.os }}-composer-
+            
+            - name: "Set up Docker Buildx"
+              uses: docker/setup-buildx-action@v3
+            
+            - name: "Generate .env.ci"
+              run: |
+                  cat > .env.ci <<EOF
+                  PROJECT_SLUG=${{ env.PROJECT_SLUG }}
+                  PHP_VERSION=${{ env.PHP_VERSION }}
+                  COMPOSE_PROFILES=${{ env.DB_COMPOSE_PROFILE }}
+                  APP_DB_NAME=${{ env.APP_DB_NAME }}
+                  APP_DB_USER=${{ env.APP_DB_USER }}
+                  APP_DB_PASSWORD=${{ env.APP_DB_PASSWORD }}
+                  DB_INTERNAL_PORT=${{ env.DB_PORT }}
+                  CI_DATABASE_URL=${{ env.DB_URL }}
+                  EOF
+            
+            - name: "Build CI image"
+              run: make ci-build
+              env:
+                  DOCKER_BUILDKIT: 1
+            
+            - name: "Composer install (prod, no-dev)"
+              run: |
+                  make ci-up
+                  docker compose -f docker-compose.ci.yml \
+                      --env-file .env.ci exec -T --user=www-data:www-data php \
+                      composer install --no-dev --optimize-autoloader --classmap-authoritative --no-interaction
+            
+            - name: "Setup SSH"
               run: |
                   mkdir -p ~/.ssh
                   chmod 700 ~/.ssh
                   echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_ed25519
                   chmod 600 ~/.ssh/id_ed25519
-                  ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
-
-            - name: Rsync release
+                  ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+            
+            - name: "Deploy to pprod"
               run: |
-                  TARGET=$( [ "${{ github.ref }}" == "refs/heads/main" ] && echo "prod" || echo "pprod" )
-                  RSYNC_DEST="${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.APP_PATH }}/<PROJECTNAME>/$TARGET/releases/${{ env.RELEASE_NAME }}"
-                  rsync -az --delete \
-                    --exclude='.git' --exclude='node_modules' --exclude='var/cache/*' --exclude='vendor' \
-                    ./ $RSYNC_DEST
-
-            - name: Activate release
-              run: |
-                  TARGET=$( [ "${{ github.ref }}" == "refs/heads/main" ] && echo "prod" || echo "pprod" )
-                  ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "${{ secrets.APP_PATH }}/<PROJECTNAME>/$TARGET/bin/activate_release.sh $TARGET ${{ env.RELEASE_NAME }}"
-
-            - name: Healthcheck
-              run: |
-                  DOMAIN=$( [ "${{ github.ref }}" == "refs/heads/main" ] && echo "<NDD>" || echo "<NDD>" )
-                  curl -f https://$DOMAIN/health || exit 1
-
-            - name: Send deployment notification
+                  docker compose -f docker-compose.ci.yml \
+                      --env-file .env.ci exec -T --user=www-data:www-data php \
+                      vendor/bin/dep deploy pprod --no-interaction -vv
+              env:
+                  DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+                  DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+                  DEPLOY_BASE_PATH: ${{ secrets.DEPLOY_BASE_PATH }}
+                  HEALTHCHECK_URL_PPROD: https://${{ vars.DOMAIN_PPROD }}/health
+                  SERVER_PHP_BIN: ${{ vars.SERVER_PHP_BIN }}
+                  SERVER_COMPOSER_BIN: ${{ vars.SERVER_COMPOSER_BIN }}
+            
+            - name: "Stop CI containers"
+              if: always()
+              run: make ci-down
+            
+            - name: "Notify pprod deployment"
               if: always()
               uses: dawidd6/action-send-mail@v3
               with:
@@ -89,12 +318,119 @@ jobs:
                   server_port: ${{ secrets.SMTP_PORT }}
                   username: ${{ secrets.SMTP_USERNAME }}
                   password: ${{ secrets.SMTP_PASSWORD }}
-                  subject: "🚀 [${{ github.ref_name }}] Déploiement ${{ job.status }}"
+                  subject: "${{ job.status == 'success' && '🚀' || '❌' }} Déploiement pprod ${{ job.status }}"
                   to: ${{ vars.MAIL_TO }}
                   from: ${{ vars.MAIL_FROM }}
                   body: |
-                    Repository : ${{ github.repository }}
-                    Branche : ${{ github.ref_name }}
-                    Auteur : ${{ github.actor }}
-                    Status : ${{ job.status }}
-                    Date : ${{ env.DEPLOY_DATE }}
+                      Repository  : ${{ github.repository }}
+                      Branche     : ${{ github.ref_name }}
+                      Commit      : ${{ github.sha }}
+                      Auteur      : ${{ github.actor }}
+                      Cible       : pprod
+                      PHP         : ${{ env.PHP_VERSION }}
+                      URL         : https://${{ vars.DOMAIN_PPROD }}
+                      Status      : ${{ job.status }}
+                      Voir le run : ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    
+    deploy-prod:
+        name: "Deploy → prod"
+        needs: ci
+        runs-on: ubuntu-latest
+        if: |
+            github.event_name == 'push' &&
+            github.ref == 'refs/heads/main'
+        
+        environment:
+            name: production
+            url: https://${{ vars.DOMAIN_PROD }}
+        
+        steps:
+            
+            - name: "Checkout"
+              uses: actions/checkout@v4
+            
+            - name: "Cache Composer"
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.composer/cache
+                      app/vendor
+                  key: ${{ runner.os }}-composer-php${{ env.PHP_VERSION }}-${{ hashFiles('app/composer.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-composer-php${{ env.PHP_VERSION }}-
+                      ${{ runner.os }}-composer-
+            
+            - name: "Set up Docker Buildx"
+              uses: docker/setup-buildx-action@v3
+            
+            - name: "Generate .env.ci"
+              run: |
+                  cat > .env.ci <<EOF
+                  PROJECT_SLUG=${{ env.PROJECT_SLUG }}
+                  PHP_VERSION=${{ env.PHP_VERSION }}
+                  COMPOSE_PROFILES=${{ env.DB_COMPOSE_PROFILE }}
+                  APP_DB_NAME=${{ env.APP_DB_NAME }}
+                  APP_DB_USER=${{ env.APP_DB_USER }}
+                  APP_DB_PASSWORD=${{ env.APP_DB_PASSWORD }}
+                  DB_INTERNAL_PORT=${{ env.DB_PORT }}
+                  CI_DATABASE_URL=${{ env.DB_URL }}
+                  EOF
+            
+            - name: "Build CI image"
+              run: make ci-build
+              env:
+                  DOCKER_BUILDKIT: 1
+            
+            - name: "Composer install (prod, no-dev)"
+              run: |
+                  make ci-up
+                  docker compose -f docker-compose.ci.yml \
+                      --env-file .env.ci exec -T --user=www-data:www-data php \
+                      composer install --no-dev --optimize-autoloader --classmap-authoritative --no-interaction
+            
+            - name: "Setup SSH"
+              run: |
+                  mkdir -p ~/.ssh
+                  chmod 700 ~/.ssh
+                  echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+                  chmod 600 ~/.ssh/id_ed25519
+                  ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+            
+            - name: "Deploy to prod"
+              run: |
+                  docker compose -f docker-compose.ci.yml \
+                      --env-file .env.ci exec -T --user=www-data:www-data php \
+                      vendor/bin/dep deploy prod --no-interaction -vv
+              env:
+                  DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+                  DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+                  DEPLOY_BASE_PATH: ${{ secrets.DEPLOY_BASE_PATH }}
+                  HEALTHCHECK_URL_PROD: https://${{ vars.DOMAIN_PROD }}/health
+                  SERVER_PHP_BIN: ${{ vars.SERVER_PHP_BIN }}
+                  SERVER_COMPOSER_BIN: ${{ vars.SERVER_COMPOSER_BIN }}
+            
+            - name: "Stop CI containers"
+              if: always()
+              run: make ci-down
+            
+            - name: "Notify prod deployment"
+              if: always()
+              uses: dawidd6/action-send-mail@v3
+              with:
+                  server_address: ${{ secrets.SMTP_SERVER }}
+                  server_port: ${{ secrets.SMTP_PORT }}
+                  username: ${{ secrets.SMTP_USERNAME }}
+                  password: ${{ secrets.SMTP_PASSWORD }}
+                  subject: "${{ job.status == 'success' && '🚀' || '❌' }} Déploiement PROD ${{ job.status }}"
+                  to: ${{ vars.MAIL_TO }}
+                  from: ${{ vars.MAIL_FROM }}
+                  body: |
+                      Repository  : ${{ github.repository }}
+                      Branche     : ${{ github.ref_name }}
+                      Commit      : ${{ github.sha }}
+                      Auteur      : ${{ github.actor }}
+                      Cible       : PROD
+                      PHP         : ${{ env.PHP_VERSION }}
+                      URL         : https://${{ vars.DOMAIN_PROD }}
+                      Status      : ${{ job.status }}
+                      Voir le run : ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

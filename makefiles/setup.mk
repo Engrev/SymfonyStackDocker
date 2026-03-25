@@ -1,5 +1,5 @@
 .PHONY: _symfony-app _assets _app-env _deps _update-hosts
-_symfony-app: # Create the Symfony application in ./app
+_symfony-app: ## Create the Symfony application in ./app
 	$(call title,Setup Symfony app)
 	@if [ -d app ]; then \
 		if [ -f app/bin/console ]; then \
@@ -53,7 +53,7 @@ _symfony-app: # Create the Symfony application in ./app
 		printf "\n$(GREEN)./app created.$(RESET)\n"; \
 	fi
 
-_assets: # Configures assets (Asset Mapper or Webpack Encore)
+_assets: ## Configures assets (Asset Mapper or Webpack Encore)
 	$(call title,Setup Assets)
 	@if [ "$(ASSETS)" = "webpack" ]; then \
 		printf "\n$(CYAN)Setting up Webpack Encore...$(RESET)\n"; \
@@ -91,7 +91,7 @@ _assets: # Configures assets (Asset Mapper or Webpack Encore)
 		fi; \
 	fi
 
-_app-env: # Generates app/.env.local (DB_URL, Mailpit DSN, REDIS_URL if enabled)
+_app-env: ## Generates app/.env.local (DB_URL, Mailpit DSN, REDIS_URL if enabled)
 	$(call title,Setup app/.env.local)
 	@if [ -f app/.env.local ]; then \
 		printf "\n$(CYAN)app/.env.local already exists.$(RESET)\n"; \
@@ -110,7 +110,7 @@ _app-env: # Generates app/.env.local (DB_URL, Mailpit DSN, REDIS_URL if enabled)
 		printf "\n$(GREEN)app/.env.local created.$(RESET)\n"; \
 	fi
 
-_deps: # Installs development dependencies (tests, PHPStan, CS Fixer, TwigCS)
+_deps: ## Installs development dependencies (tests, PHPStan, CS Fixer, TwigCS)
 	$(call title,Setup dev dependencies)
 	@$(COMPOSER) require --dev --with-all-dependencies \
 		"symfony/test-pack" \
@@ -123,6 +123,6 @@ _deps: # Installs development dependencies (tests, PHPStan, CS Fixer, TwigCS)
 		"friendsoftwig/twigcs" \
 	;
 
-_update-hosts: # Updates the OS hosts file with the VHOST (best-effort)
+_update-hosts: ## Updates the OS hosts file with the VHOST (best-effort)
 	$(call title,Update hosts file)
 	@bash makefiles/host.sh "${VHOST}"

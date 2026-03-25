@@ -20,9 +20,9 @@ _prepare: _check-docker _default-ports _env _webserver _docker ## Prepare the en
 _setup: _symfony-app _assets _app-env _deps _update-hosts ## Set up the application (create Symfony app, configure assets and .env.local, install dev dependencies, update hosts)
 _end:
 	@printf "$(BLUE)"
-	@printf "+===============================+\n"
-	@printf "|     Installation complete     |\n"
-	@printf "+===============================+\n"
+	@printf "+=================================+\n"
+	@printf "|     Installation complete !     |\n"
+	@printf "+=================================+\n"
 	@printf "$(RESET)\n"
 	@printf "$(BOLD)  Application   :$(RESET) http://$(VHOST):$(WEB_EXTERNAL_PORT) in your browser once Symfony boots.\n"
 	@printf "$(BOLD)  Mailpit UI    :$(RESET) http://$(VHOST):8025.\n"

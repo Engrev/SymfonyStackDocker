@@ -128,7 +128,7 @@ The project is designed for secure and professional deployment:
 2. **Included Scripts**: `activate_release.sh` and `rollback.sh` to automate production rollouts.
 3. **GitHub Actions**: Ready-to-use workflow for SSH deployment with deploy keys.
 
-Check the [**PROCESS.md**](DEPLOYING.md) file for the detailed step-by-step production setup guide.
+Check the [**DEPLOYING.md**](doc/DEPLOYING.md) file for the detailed step-by-step production setup guide.
 
 ---
 

@@ -1,37 +1,174 @@
+## ════════════════════════════════════════════════════════════════
+##  .github/workflows/rollback.yml
+##
+## Manual rollback via Deployer.
+## Manually triggered from GitHub Actions → workflow_dispatch.
+##
+## To change the PHP version:
+##    Modify PHP_VERSION in the "env:" section below.
+##
+##  Required Secrets:
+##    DEPLOY_KEY            ed25519 private SSH key
+##    DEPLOY_HOST           SSH host of the server
+##    DEPLOY_USER           SSH user
+##    DEPLOY_BASE_PATH      Base path on the server
+##    SMTP_SERVER           SMTP server
+##    SMTP_PORT             SMTP port
+##    SMTP_USERNAME         SMTP username
+##    SMTP_PASSWORD         SMTP password
+##    CODECOV_TOKEN         (optional) Codecov token
+##
+##  Required Variables:
+##    MAIL_TO               Notification recipient
+##    MAIL_FROM             Notification sender
+##    DOMAIN_PROD           Prod domain (e.g., my-project.com)
+##    DOMAIN_PPROD          Pprod domain (e.g., pprod.my-project.com)
+##    SERVER_PHP_BIN        PHP path on the server (e.g., /opt/php8.4/bin/php)
+##    SERVER_COMPOSER_BIN   Composer path on the server
+## ════════════════════════════════════════════════════════════════
 name: Rollback
 
 on:
     workflow_dispatch:
         inputs:
             environment:
-                description: "prod ou pprod"
+                description: "Environnement cible"
                 required: true
-                default: "prod"
-            keep:
-                description: "Nombre de releases à garder"
+                type: choice
+                options:
+                    - pprod
+                    - prod
+                default: pprod
+            release:
+                description: "Release spécifique (optionnel, ex: 20250311_143000). Laisser vide = release précédente."
                 required: false
-                default: "5"
+                default: ""
+
+env:
+    PHP_VERSION: "8.2"
+    DB_COMPOSE_PROFILE: "ci-mariadb"
+    DB_PORT: "3306"
+    DB_URL: "mysql://app_test:app_test_pass@db-mariadb:3306/app_test?serverVersion=11.8.6-MariaDB&charset=utf8mb4"
+    PROJECT_SLUG: "symfony-app"
+    APP_DB_NAME: "app_test"
+    APP_DB_USER: "app_test"
+    APP_DB_PASSWORD: "app_test_pass"
 
 jobs:
     rollback:
+        name: "Rollback → ${{ github.event.inputs.environment }}"
         runs-on: ubuntu-latest
-
+        
+        environment:
+            name: ${{ github.event.inputs.environment == 'prod' && 'production' || 'preproduction' }}
+            url: ${{ github.event.inputs.environment == 'prod' && format('https://{0}', vars.DOMAIN_PROD) || format('https://{0}', vars.DOMAIN_PPROD) }}
+        
         steps:
-            - name: Set deployment date as env var
-              run: echo "DEPLOY_DATE=${{ github.run_started_at }}" >> $GITHUB_ENV
-
-            - name: Setup SSH
+            
+            - name: "Checkout"
+              uses: actions/checkout@v4
+            
+            - name: "Cache Composer"
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.composer/cache
+                      app/vendor
+                  key: ${{ runner.os }}-composer-php${{ env.PHP_VERSION }}-${{ hashFiles('app/composer.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-composer-php${{ env.PHP_VERSION }}-
+                      ${{ runner.os }}-composer-
+            
+            - name: "Set up Docker Buildx"
+              uses: docker/setup-buildx-action@v3
+            
+            - name: "Generate .env.ci"
+              run: |
+                  cat > .env.ci <<EOF
+                  PROJECT_SLUG=${{ env.PROJECT_SLUG }}
+                  PHP_VERSION=${{ env.PHP_VERSION }}
+                  COMPOSE_PROFILES=${{ env.DB_COMPOSE_PROFILE }}
+                  APP_DB_NAME=${{ env.APP_DB_NAME }}
+                  APP_DB_USER=${{ env.APP_DB_USER }}
+                  APP_DB_PASSWORD=${{ env.APP_DB_PASSWORD }}
+                  DB_INTERNAL_PORT=${{ env.DB_PORT }}
+                  CI_DATABASE_URL=${{ env.DB_URL }}
+                  EOF
+            
+            - name: "Build CI image"
+              run: make ci-build
+              env:
+                  DOCKER_BUILDKIT: 1
+            
+            - name: "Start CI containers"
+              run: make ci-up
+            
+            - name: "Setup SSH"
               run: |
                   mkdir -p ~/.ssh
+                  chmod 700 ~/.ssh
                   echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_ed25519
                   chmod 600 ~/.ssh/id_ed25519
-                  ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
-
-            - name: Run rollback script on server
+                  ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+            
+            - name: "Rollback ${{ github.event.inputs.environment }}"
               run: |
-                  ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "${{ secrets.APP_PATH }}/<PROJECTNAME>/bin/rollback.sh ${{ github.event.inputs.environment }} ${{ github.event.inputs.keep }}"
-
-            - name: Send rollback notification
+                  ENV="${{ github.event.inputs.environment }}"
+                  SPECIFIC="${{ github.event.inputs.release }}"
+                  
+                  if [ -n "$SPECIFIC" ]; then
+                      echo "Rolling back to specific release: $SPECIFIC"
+                      docker compose -f docker-compose.ci.yml \
+                          --env-file .env.ci exec -T --user=www-data:www-data php \
+                          vendor/bin/dep rollback "$ENV" --no-interaction -vv \
+                          --option "release=$SPECIFIC"
+                  else
+                      echo "Rolling back to previous release"
+                      docker compose -f docker-compose.ci.yml \
+                          --env-file .env.ci exec -T --user=www-data:www-data php \
+                          vendor/bin/dep rollback "$ENV" --no-interaction -vv
+                  fi
+              env:
+                  DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+                  DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+                  DEPLOY_BASE_PATH: ${{ secrets.DEPLOY_BASE_PATH }}
+                  SERVER_PHP_BIN: ${{ vars.SERVER_PHP_BIN }}
+                  SERVER_COMPOSER_BIN: ${{ vars.SERVER_COMPOSER_BIN }}
+            
+            - name: "Healthcheck post-rollback"
+              run: |
+                  if [ "${{ github.event.inputs.environment }}" = "prod" ]; then
+                      DOMAIN="${{ vars.DOMAIN_PROD }}"
+                  else
+                      DOMAIN="${{ vars.DOMAIN_PPROD }}"
+                  fi
+                  
+                  echo "Checking https://$DOMAIN/health ..."
+                  for i in 1 2 3 4 5; do
+                      curl -sf --max-time 10 "https://$DOMAIN/health" \
+                          && echo "✅ Healthcheck passed" && exit 0
+                      echo "Attempt $i/5 failed, retrying in 10s..."
+                      sleep 10
+                  done
+                  echo "❌ Healthcheck failed after 5 attempts"
+                  exit 1
+            
+            - name: "List releases after rollback"
+              if: always()
+              run: |
+                  docker compose -f docker-compose.ci.yml \
+                      --env-file .env.ci exec -T --user=www-data:www-data php \
+                      vendor/bin/dep releases ${{ github.event.inputs.environment }}
+              env:
+                  DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+                  DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+                  DEPLOY_BASE_PATH: ${{ secrets.DEPLOY_BASE_PATH }}
+            
+            - name: "Stop CI containers"
+              if: always()
+              run: make ci-down
+            
+            - name: "Notify rollback"
               if: always()
               uses: dawidd6/action-send-mail@v3
               with:
@@ -39,11 +176,16 @@ jobs:
                   server_port: ${{ secrets.SMTP_PORT }}
                   username: ${{ secrets.SMTP_USERNAME }}
                   password: ${{ secrets.SMTP_PASSWORD }}
-                  subject: "⏪ Rollback ${{ github.event.inputs.environment }} - ${{ github.repository }}"
+                  subject: "${{ job.status == 'success' && '⏪' || '❌' }} Rollback ${{ github.event.inputs.environment }} — ${{ job.status }}"
                   to: ${{ vars.MAIL_TO }}
                   from: ${{ vars.MAIL_FROM }}
                   body: |
-                    Repository : ${{ github.repository }}
-                    Environnement : ${{ github.event.inputs.environment }}
-                    Auteur : ${{ github.actor }}
-                    Date : ${{ env.DEPLOY_DATE }}
+                      ⏪ Rollback déclenché manuellement
+                      
+                      Repository    : ${{ github.repository }}
+                      Environnement : ${{ github.event.inputs.environment }}
+                      Release visée : ${{ github.event.inputs.release != '' && github.event.inputs.release || 'précédente (auto)' }}
+                      PHP           : ${{ env.PHP_VERSION }}
+                      Déclenché par : ${{ github.actor }}
+                      Status        : ${{ job.status }}
+                      Voir le run   : ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

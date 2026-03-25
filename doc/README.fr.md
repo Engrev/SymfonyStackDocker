@@ -48,7 +48,7 @@
    - Installer toutes les dépendances de développement.
    - Tenter d'ajouter votre domaine (ex: `symfony.local`) à votre fichier `hosts`.
 
-![installation](screenshots/install.png)
+![installation](../screenshots/install.png)
 
 ---
 
@@ -128,7 +128,7 @@ Le projet est conçu pour un déploiement sécurisé et professionnel :
 2. **Scripts inclus** : `activate_release.sh` et `rollback.sh` pour automatiser la mise en production.
 3. **GitHub Actions** : Workflow prêt pour déployer via SSH avec des clés de déploiement.
 
-Consultez le fichier [**PROCESS.md**](DEPLOYING.md) pour le guide détaillé étape par étape de la mise en production.
+Consultez le fichier [**DEPLOYING.md**](DEPLOYING.md) pour le guide détaillé étape par étape de la mise en production.
 
 ---
 
