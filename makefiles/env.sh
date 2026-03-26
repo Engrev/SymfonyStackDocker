@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 ## ════════════════════════════════════════════════════════════════
-##  📄 env.sh — Configuration des variables d'environnement
-##  Génère le fichier .env.docker de manière interactive
+##  env.sh — Environment variable configuration
+##  Generates the .env.docker file interactively
 ## ════════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -40,7 +40,7 @@ slugify() {
         | sed 's/^-//;s/-$//'
 }
 
-# ── Valeurs par défaut ────────────────────────────────────────────
+# ── Default Values ──────────────────────────────────────────────
 DEFAULT_WEB_PORT=8080
 DEFAULT_DB_PORT_MARIADB=3306
 DEFAULT_DB_PORT_POSTGRES=5432
@@ -48,6 +48,7 @@ DEFAULT_PMA_PORT=8081
 DEFAULT_PHP_VERSION="8.2"
 DEFAULT_REDIS_PORT=6379
 ENV_FILE=".env.docker"
+CI_ENV_FILE=".env.ci"
 
 # ════════════════════════════════════════════════════════════════
 #  File already exists ?
@@ -247,6 +248,34 @@ if [ "$approve" = "n" ] || [ "$approve" = "N" ]; then
 fi
 
 success "Configuration saved to ${BOLD}$ENV_FILE${RESET}."
+
+# ════════════════════════════════════════════════════════════════
+#  Updating the .env.ci file
+# ════════════════════════════════════════════════════════════════
+if [ -f "$CI_ENV_FILE" ]; then
+    info "Updating $CI_ENV_FILE..."
+
+    # Project slug
+    sed -i "s/^PROJECT_SLUG=.*/PROJECT_SLUG=$project_slug/" "$CI_ENV_FILE"
+
+    # PHP Version
+    sed -i "s/^PHP_VERSION=.*/PHP_VERSION=$php_version/" "$CI_ENV_FILE"
+
+    # Database Engine & Profiles
+    if [ "$database" = "mariadb" ]; then
+        sed -i "s/^COMPOSE_PROFILES=.*/COMPOSE_PROFILES=ci-mariadb/" "$CI_ENV_FILE"
+        sed -i "s/^DB_INTERNAL_PORT=.*/DB_INTERNAL_PORT=3306/" "$CI_ENV_FILE"
+        # We replace the database URL with the MariaDB URL
+        sed -i "s|^CI_DATABASE_URL=.*|CI_DATABASE_URL=mysql://app_test:app_test_pass@db-mariadb:3306/app_test?serverVersion=11.8.6-MariaDB\&charset=utf8mb4|" "$CI_ENV_FILE"
+    else
+        sed -i "s/^COMPOSE_PROFILES=.*/COMPOSE_PROFILES=ci-postgres/" "$CI_ENV_FILE"
+        sed -i "s/^DB_INTERNAL_PORT=.*/DB_INTERNAL_PORT=5432/" "$CI_ENV_FILE"
+        # We replace the database URL with the Postgres URL
+        sed -i "s|^CI_DATABASE_URL=.*|CI_DATABASE_URL=postgresql://app_test:app_test_pass@db-postgres:5432/app_test?serverVersion=18.3\&charset=utf8|" "$CI_ENV_FILE"
+    fi
+
+    success "$CI_ENV_FILE updated."
+fi
 
 # ── Symlink to .env for Docker Compose auto-loading ───────────────
 if [ -f "$ENV_FILE" ]; then

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 ## ════════════════════════════════════════════════════════════════
-##  🌐 Gestion du fichier hosts (Linux / macOS / Windows WSL)
+##  Managing the hosts file (Linux / macOS / Windows WSL)
 ## ════════════════════════════════════════════════════════════════
 set -euo pipefail
 
@@ -24,7 +24,7 @@ error()   { printf "${RED}❌ %b${RESET}\n" "$1"; }
 
 [ -z "$HOSTNAME" ] && info "Usage : $0 <hostname> [--add|--remove]" && exit 0
 
-# ── Détection de l'OS ─────────────────────────────────────────────
+# ── OS Detection ─────────────────────────────────────────────────
 detect_os() {
     case "$(uname -s)" in
         Linux*)
@@ -44,13 +44,13 @@ detect_os() {
 OS=$(detect_os)
 info "Système détecté : ${BOLD}${OS}${RESET}."
 
-# ── Détermine le chemin du fichier hosts ─────────────────────────
+# ── Determine the hosts file path ───────────────────────────────
 case "$OS" in
     linux|mac)
         HOSTS_FILE="/etc/hosts"
         ;;
     wsl)
-        # Sur WSL, modifier les deux fichiers hosts
+        # On WSL, modify the two hosts files
         HOSTS_FILE="/etc/hosts"
         WIN_HOSTS="/mnt/c/Windows/System32/drivers/etc/hosts"
         ;;
@@ -63,7 +63,7 @@ case "$OS" in
         ;;
 esac
 
-# ── Fonctions de manipulation ─────────────────────────────────────
+# ── Manipulation functions ───────────────────────────────────────
 hosts_has_entry() {
     local file="$1"
     grep -qF "$HOSTNAME" "$file" 2>/dev/null
@@ -76,12 +76,12 @@ hosts_add_entry() {
         return 0
     fi
 
-    # Vérifie si on peut écrire directement
+    # Check if we can write directly
     if [ -w "$file" ]; then
         echo "$ENTRY" >> "$file"
         success "Entrée ajoutée dans ${file}."
     else
-        # Essaye avec sudo
+        # Try with sudo
         if command -v sudo &>/dev/null; then
             echo ""
             warning "Droits administrateur requis pour modifier ${file}."
@@ -133,7 +133,7 @@ hosts_remove_entry() {
     fi
 }
 
-# ── Windows via PowerShell (pour WSL ou MSYS) ─────────────────────
+# ── Windows via PowerShell (for WSL or MSYS) ─────────────────────
 windows_add_entry() {
     local win_hosts_native
     if [ "$OS" = "wsl" ]; then
@@ -175,7 +175,7 @@ windows_remove_entry() {
     fi
 }
 
-# ── Exécution ─────────────────────────────────────────────────────
+# ── Execution ─────────────────────────────────────────────────────
 echo ""
 if [ "$ACTION" = "--remove" ]; then
     info "Suppression de l'entrée hosts pour : ${BOLD}${HOSTNAME}${RESET}."
@@ -185,10 +185,10 @@ else
     info "Ajout de l'entrée hosts pour : ${BOLD}${HOSTNAME}${RESET}."
     hosts_add_entry "$HOSTS_FILE"
 
-    # Sur WSL, modifier aussi le fichier hosts Windows
+    # On WSL, also modify the Windows hosts file
     if [ "$OS" = "wsl" ]; then
         windows_add_entry
-        # Et aussi le hosts Linux WSL si différent
+        # And also the Linux WSL hosts, which are so different
         if [ "$WIN_HOSTS" != "$HOSTS_FILE" ] && [ -f "$WIN_HOSTS" ]; then
             hosts_add_entry "$WIN_HOSTS" 2>/dev/null || true
         fi
@@ -200,7 +200,7 @@ info "Fichier hosts actuel (entrées ${HOSTNAME}) :"
 grep -F "$HOSTNAME" "$HOSTS_FILE" 2>/dev/null | sed 's/^/    /' || echo "    (aucune entrée)"
 echo ""
 
-# ── Vérification DNS ──────────────────────────────────────────────
+# ── DNS Verification ──────────────────────────────────────────────
 if command -v ping &>/dev/null; then
     if ping -c1 -W1 "$HOSTNAME" &>/dev/null 2>&1; then
         success "DNS résolu : ${BOLD}${HOSTNAME}${RESET} → ${IP}."

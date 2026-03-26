@@ -13,12 +13,12 @@ server {
     location ~* \.(ico|css|js|gif|jpeg|jpg|png|webp|svg|woff|woff2|ttf|eot)$ {
         expires 1y;
         add_header Cache-Control "public, immutable";
-        try_files  \$uri =404;
+        try_files  $uri =404;
     }
 
     # Symfony front controller
     location / {
-        try_files \$uri /index.php\$is_args\$args;
+        try_files $uri /index.php$is_args$args;
     }
 
     location ~ ^/index\.php(/|$) {
@@ -26,8 +26,8 @@ server {
         fastcgi_split_path_info ^(.+\.php)(/.*)$;
         include fastcgi_params;
 
-        fastcgi_param  SCRIPT_FILENAME \$realpath_root\$fastcgi_script_name;
-        fastcgi_param  DOCUMENT_ROOT   \$realpath_root;
+        fastcgi_param  SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        fastcgi_param  DOCUMENT_ROOT   $realpath_root;
         fastcgi_param  HTTPS           off;
 
         # Timeouts
