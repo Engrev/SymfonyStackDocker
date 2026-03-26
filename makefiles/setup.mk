@@ -25,27 +25,27 @@ _symfony-app: ## Create the Symfony application in ./app
 	@if [ ! -d app ] || [ ! -f app/bin/console ]; then \
 		mkdir -p app; \
 	    printf "\n$(CYAN)Creating Symfony project in ./app ...$(RESET)\n"; \
-		$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) 'git config --global --add safe.directory .'; \
-	    if [ "$(DIST)" = "webapp" ]; then \
+		$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) 'git config --global user.email "dev@local.host" && git config --global user.name "Dev Local" && git config --global --add safe.directory .'; \
+		if [ "$(DIST)" = "webapp" ]; then \
 			if [ "$(SYMFONY_VERSION)" = "stable" ]; then \
-				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && symfony new _tmp --webapp --no-git && shopt -s dotglob && mv _tmp/* . && rmdir _tmp" || exit 1; \
+				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && symfony new _tmp --webapp --no-interaction && shopt -s dotglob && mv _tmp/* . && rmdir _tmp && rm -rf .git" || exit 1; \
 			elif [ "$(SYMFONY_VERSION)" = "lts" ]; then \
-				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && symfony new _tmp --version=$(SYMFONY_VERSION) --webapp --no-git && shopt -s dotglob && mv _tmp/* . && rmdir _tmp" || exit 1; \
+				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && symfony new _tmp --version=$(SYMFONY_VERSION) --webapp --no-interaction && shopt -s dotglob && mv _tmp/* . && rmdir _tmp && rm -rf .git" || exit 1; \
 			else \
-				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && symfony new _tmp --version='$(SYMFONY_VERSION)' --webapp --no-git && shopt -s dotglob && mv _tmp/* . && rmdir _tmp" || exit 1; \
+				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && symfony new _tmp --version='$(SYMFONY_VERSION)' --webapp --no-interaction && shopt -s dotglob && mv _tmp/* . && rmdir _tmp && rm -rf .git" || exit 1; \
 			fi; \
 			if [ "$(WEB_SERVER)" = "apache" ]; then \
-				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "composer require symfony/apache-pack" || exit 1; \
+				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "composer require symfony/apache-pack --no-interaction" || exit 1; \
 			fi; \
 		else \
 			if [ "$(SYMFONY_VERSION)" = "stable" ]; then \
-				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && symfony new _tmp --no-git && shopt -s dotglob && mv _tmp/* . && rmdir _tmp" || exit 1; \
+				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && symfony new _tmp --no-interaction && shopt -s dotglob && mv _tmp/* . && rmdir _tmp && rm -rf .git" || exit 1; \
 			elif [ "$(SYMFONY_VERSION)" = "lts" ]; then \
-				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && symfony new _tmp --version=$(SYMFONY_VERSION) --no-git && shopt -s dotglob && mv _tmp/* . && rmdir _tmp" || exit 1; \
+				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && symfony new _tmp --version=$(SYMFONY_VERSION) --no-interaction && shopt -s dotglob && mv _tmp/* . && rmdir _tmp && rm -rf .git" || exit 1; \
 			else \
-				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && symfony new _tmp --version='$(SYMFONY_VERSION)' --no-git && shopt -s dotglob && mv _tmp/* . && rmdir _tmp" || exit 1; \
+				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && symfony new _tmp --version='$(SYMFONY_VERSION)' --no-interaction && shopt -s dotglob && mv _tmp/* . && rmdir _tmp && rm -rf .git" || exit 1; \
 			fi; \
-			$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "composer require api" || exit 1; \
+			$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "composer require api --no-interaction" || exit 1; \
 		fi; \
 		cp phpstan.dist.neon app/phpstan.dist.neon; \
 		mkdir -p app/.github; \
@@ -57,7 +57,7 @@ _assets: ## Configures assets (Asset Mapper or Webpack Encore)
 	$(call title,Setup Assets)
 	@if [ "$(ASSETS)" = "webpack" ]; then \
 		printf "\n$(CYAN)Setting up Webpack Encore...$(RESET)\n"; \
-		$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "set -e; composer require symfony/webpack-encore-bundle"; \
+		$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "set -e; composer require symfony/webpack-encore-bundle --no-interaction"; \
 		$(DOCKER_COMPOSE_EXEC_ROOT_NO_TTY) node $(WITH_BASH) "chown -R www-data:www-data /home/www-data /var/www/html/node_modules" || true; \
 		$(DOCKER_COMPOSE_EXEC_NO_TTY) node $(WITH_BASH) "set -e && \
 			if [ ! -f package.json ]; then npm init -y; fi && \
@@ -69,7 +69,7 @@ _assets: ## Configures assets (Asset Mapper or Webpack Encore)
 			npm install"; \
 	else \
 		printf "\n$(CYAN)Trying to set up Asset Mapper...$(RESET)\n"; \
-		if $(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "set -e; composer require symfony/asset-mapper"; then :; \
+		if $(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "set -e; composer require symfony/asset-mapper --no-interaction"; then :; \
 		else \
 			printf "$(YELLOW)Asset Mapper may be unsupported for this Symfony version. Falling back to Webpack Encore...$(RESET)"; \
 			if grep -q '^COMPOSE_PROFILES=' .env.docker; then \
@@ -78,7 +78,7 @@ _assets: ## Configures assets (Asset Mapper or Webpack Encore)
 				echo 'COMPOSE_PROFILES=node' >> .env.docker; \
 			fi; \
 			$(DOCKER_COMPOSE_UP) --build node; \
-			$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "set -e; composer require symfony/webpack-encore-bundle"; \
+			$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "set -e; composer require symfony/webpack-encore-bundle --no-interaction"; \
 			$(DOCKER_COMPOSE_EXEC_ROOT_NO_TTY) node $(WITH_BASH) "chown -R www-data:www-data /home/www-data /var/www/html/node_modules" || true; \
 			$(DOCKER_COMPOSE_EXEC_NO_TTY) node $(WITH_BASH) "set -e && \
 				if [ ! -f package.json ]; then npm init -y; fi && \

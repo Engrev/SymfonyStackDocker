@@ -88,7 +88,7 @@ build: ## Build all Docker services
 build-no-cache: ## Build all Docker services (without cache)
 	$(call title,Docker Build no cache)
 	@$(DOCKER_COMPOSE) build --no-cache
-	$(call success,Docker images built successfully (no cache).)
+	$(call success,Docker images built successfully \(no cache\).)
 
 destroy: ## Force remove all containers, networks, volumes, and images created
 	$(call title,Docker Destroy)
