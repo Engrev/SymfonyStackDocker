@@ -45,10 +45,14 @@ DEFAULT_WEB_PORT=8080
 DEFAULT_DB_PORT_MARIADB=3306
 DEFAULT_DB_PORT_POSTGRES=5432
 DEFAULT_PMA_PORT=8081
-DEFAULT_PHP_VERSION="8.2"
 DEFAULT_REDIS_PORT=6379
+DEFAULT_PHP_VERSION="8.2"
 ENV_FILE=".env.docker"
 CI_ENV_FILE=".env.ci"
+PIPELINE_FILE=".github/workflows/pipeline.yml"
+ROLLBACK_FILE=".github/workflows/rollback.yml"
+CI_MARIADB_URL="mysql://app_test:app_test_pass@db-mariadb:3306/app_test?serverVersion=11.8.6-MariaDB&charset=utf8mb4"
+CI_POSTGRES_URL="postgresql://app_test:app_test_pass@db-postgres:5432/app_test?serverVersion=18.3&charset=utf8"
 
 # ════════════════════════════════════════════════════════════════
 #  File already exists ?
@@ -250,31 +254,64 @@ fi
 success "Configuration saved to ${BOLD}$ENV_FILE${RESET}."
 
 # ════════════════════════════════════════════════════════════════
-#  Updating the .env.ci file
+#  Updating CI files (.env.ci, pipeline.yml, rollback.yml)
 # ════════════════════════════════════════════════════════════════
-if [ -f "$CI_ENV_FILE" ]; then
-    info "Updating $CI_ENV_FILE..."
+if [ -f "$CI_ENV_FILE" ] || [ -f "$PIPELINE_FILE" ] || [ -f "$ROLLBACK_FILE" ]; then
+    info "Updating CI configuration files..."
 
-    # Project slug
-    sed -i "s/^PROJECT_SLUG=.*/PROJECT_SLUG=$project_slug/" "$CI_ENV_FILE"
-
-    # PHP Version
-    sed -i "s/^PHP_VERSION=.*/PHP_VERSION=$php_version/" "$CI_ENV_FILE"
-
-    # Database Engine & Profiles
+    # Prepare values based on database
     if [ "$database" = "mariadb" ]; then
-        sed -i "s/^COMPOSE_PROFILES=.*/COMPOSE_PROFILES=ci-mariadb/" "$CI_ENV_FILE"
-        sed -i "s/^DB_INTERNAL_PORT=.*/DB_INTERNAL_PORT=3306/" "$CI_ENV_FILE"
-        # We replace the database URL with the MariaDB URL
-        sed -i "s|^CI_DATABASE_URL=.*|CI_DATABASE_URL=mysql://app_test:app_test_pass@db-mariadb:3306/app_test?serverVersion=11.8.6-MariaDB\&charset=utf8mb4|" "$CI_ENV_FILE"
+        db_profile="ci-mariadb"
+        db_port="3306"
+        db_url="$CI_MARIADB_URL"
     else
-        sed -i "s/^COMPOSE_PROFILES=.*/COMPOSE_PROFILES=ci-postgres/" "$CI_ENV_FILE"
-        sed -i "s/^DB_INTERNAL_PORT=.*/DB_INTERNAL_PORT=5432/" "$CI_ENV_FILE"
-        # We replace the database URL with the Postgres URL
-        sed -i "s|^CI_DATABASE_URL=.*|CI_DATABASE_URL=postgresql://app_test:app_test_pass@db-postgres:5432/app_test?serverVersion=18.3\&charset=utf8|" "$CI_ENV_FILE"
+        db_profile="ci-postgres"
+        db_port="5432"
+        db_url="$CI_POSTGRES_URL"
     fi
 
-    success "$CI_ENV_FILE updated."
+    # Escaped URL for sed
+    db_url_sed=$(echo "$db_url" | sed 's/&/\\&/g')
+
+    # --- Updating .env.ci ---
+    if [ -f "$CI_ENV_FILE" ]; then
+        sed -i "s/^PROJECT_SLUG=.*/PROJECT_SLUG=$project_slug/" "$CI_ENV_FILE"
+        sed -i "s/^PHP_VERSION=.*/PHP_VERSION=$php_version/" "$CI_ENV_FILE"
+        sed -i "s/^COMPOSE_PROFILES=.*/COMPOSE_PROFILES=$db_profile/" "$CI_ENV_FILE"
+        sed -i "s/^DB_INTERNAL_PORT=.*/DB_INTERNAL_PORT=$db_port/" "$CI_ENV_FILE"
+        sed -i "s|^CI_DATABASE_URL=.*|CI_DATABASE_URL=$db_url_sed|" "$CI_ENV_FILE"
+        success "$CI_ENV_FILE updated."
+    fi
+
+    # --- Updating pipeline.yml ---
+    if [ -f "$PIPELINE_FILE" ]; then
+        # Section env:
+        sed -i "s/PHP_VERSION: \".*\"/PHP_VERSION: \"$php_version\"/" "$PIPELINE_FILE"
+        sed -i "s/DB_ENGINE: \".*\"/DB_ENGINE: \"$database\"/" "$PIPELINE_FILE"
+        sed -i "s/DB_COMPOSE_PROFILE: \".*\"/DB_COMPOSE_PROFILE: \"$db_profile\"/" "$PIPELINE_FILE"
+        sed -i "s/DB_PORT: \".*\"/DB_PORT: \"$db_port\"/" "$PIPELINE_FILE"
+        sed -i "s|DB_URL: \".*\"|DB_URL: \"$db_url_sed\"|" "$PIPELINE_FILE"
+        sed -i "s/PROJECT_SLUG: \".*\"/PROJECT_SLUG: \"$project_slug\"/" "$PIPELINE_FILE"
+
+        # Section matrix: (targeting lines after the specific comment)
+        sed -i "/synchronized with env: above/,/php-version:/ s/php-version: \".*\"/php-version: \"$php_version\"/" "$PIPELINE_FILE"
+        sed -i "/synchronized with env: above/,/db:/ s/db: \".*\"/db: \"$database\"/" "$PIPELINE_FILE"
+        sed -i "/synchronized with env: above/,/compose-profile:/ s/compose-profile: \".*\"/compose-profile: \"$db_profile\"/" "$PIPELINE_FILE"
+        sed -i "/synchronized with env: above/,/db-port:/ s/db-port: \".*\"/db-port: \"$db_port\"/" "$PIPELINE_FILE"
+        sed -i "/synchronized with env: above/,/db-url:/ s|db-url: \".*\"|db-url: \"$db_url_sed\"|" "$PIPELINE_FILE"
+
+        success "$PIPELINE_FILE updated."
+    fi
+
+    # --- Updating rollback.yml ---
+    if [ -f "$ROLLBACK_FILE" ]; then
+        sed -i "s/PHP_VERSION: \".*\"/PHP_VERSION: \"$php_version\"/" "$ROLLBACK_FILE"
+        sed -i "s/DB_COMPOSE_PROFILE: \".*\"/DB_COMPOSE_PROFILE: \"$db_profile\"/" "$ROLLBACK_FILE"
+        sed -i "s/DB_PORT: \".*\"/DB_PORT: \"$db_port\"/" "$ROLLBACK_FILE"
+        sed -i "s|DB_URL: \".*\"|DB_URL: \"$db_url_sed\"|" "$ROLLBACK_FILE"
+        sed -i "s/PROJECT_SLUG: \".*\"/PROJECT_SLUG: \"$project_slug\"/" "$ROLLBACK_FILE"
+        success "$ROLLBACK_FILE updated."
+    fi
 fi
 
 # ── Symlink to .env for Docker Compose auto-loading ───────────────

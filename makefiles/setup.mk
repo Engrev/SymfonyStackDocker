@@ -48,8 +48,6 @@ _symfony-app: ## Create the Symfony application in ./app
 			$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "composer require api --no-interaction" || exit 1; \
 		fi; \
 		cp phpstan.dist.neon app/phpstan.dist.neon; \
-		mkdir -p app/.github; \
-		cp -r .docker/github/workflows app/.github/; \
 		printf "\n$(GREEN)./app created.$(RESET)\n"; \
 	fi
 

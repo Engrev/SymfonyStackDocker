@@ -1,14 +1,14 @@
 ## ════════════════════════════════════════════════════════════════
-##  ci.mk — Targets CI (intégration continue)
+##  ci.mk — CI Targets (Continuous Integration)
 ##
-##  Variables configurables :
-##    CI_ENV_FILE   Fichier d'environnement CI (défaut : .env.ci)
-##    CI_COMPOSE    Override du fichier compose CI
+##  Configurable variables:
+##    CI_ENV_FILE   CI environment file (default: .env.ci)
+##    CI_COMPOSE    CI compose file override
 ## ════════════════════════════════════════════════════════════════
 
 ##@ CI
 
-# ── Variables CI ──────────────────────────────────────────────────
+# ── CI Variables ─────────────────────────────────────────────────
 CI_ENV_FILE     ?= .env.ci
 CI_COMPOSE_FILE ?= docker-compose.ci.yml
 
@@ -25,10 +25,10 @@ CI_WITH_BASH    = bash -c
 
 .PHONY: ci ci-build ci-up ci-down ci-install ci-migrate ci-lint ci-test ci-coverage ci-status ci-logs
 
-# ────────────────────────────────────────────────────────────────
-#  Pipeline complet
-# ────────────────────────────────────────────────────────────────
-ci: ## Pipeline CI complet (build → up → install → migrate → lint → test → down)
+# ─────────────────────────────────────────────────────────────────
+#  Full Pipeline
+# ─────────────────────────────────────────────────────────────────
+ci: ## Full CI Pipeline (build → up → install → migrate → lint → test → down)
 	$(call title,CI Pipeline)
 	@$(MAKE) ci-build
 	@$(MAKE) ci-up
@@ -40,57 +40,57 @@ ci: ## Pipeline CI complet (build → up → install → migrate → lint → te
 	$(call success,CI pipeline completed successfully.)
 
 # ────────────────────────────────────────────────────────────────
-#  Infrastructure CI
+#  CI Infrastructure
 # ────────────────────────────────────────────────────────────────
-ci-build: ## Build l'image PHP pour la CI
+ci-build: ## Build the PHP image for CI
 	$(call title,CI Build)
 	@$(DOCKER_COMPOSE_CI) build --pull php
 	$(call success,CI image built.)
 
-ci-up: ## Démarre les containers CI (détaché)
+ci-up: ## Start CI containers (detached)
 	$(call title,CI Up)
 	@$(DOCKER_COMPOSE_CI) up -d --remove-orphans
 	@printf "$(CYAN)Waiting for services to be healthy...$(RESET)\n"
 	@$(DOCKER_COMPOSE_CI) wait php || true
 	$(call success,CI containers started.)
 
-ci-down: ## Arrête et supprime les containers CI
+ci-down: ## Stop and remove CI containers
 	$(call title,CI Down)
 	@$(DOCKER_COMPOSE_CI) down --remove-orphans --volumes
 	$(call success,CI containers stopped and cleaned.)
 
-ci-status: ## État des containers CI
+ci-status: ## CI containers status
 	@$(DOCKER_COMPOSE_CI) ps
 
-ci-logs: ## Logs des containers CI
+ci-logs: ## CI containers logs
 	@$(DOCKER_COMPOSE_CI) logs --tail=100
 
 # ────────────────────────────────────────────────────────────────
-#  Installation des dépendances
+#  Dependencies installation
 # ────────────────────────────────────────────────────────────────
-ci-install: ## Installe les dépendances Composer (env=test)
+ci-install: ## Install Composer dependencies (env=test)
 	$(call title,CI Composer install)
 	@$(CI_COMPOSER) install --prefer-dist --optimize-autoloader
 	$(call success,Dependencies installed.)
 
 # ────────────────────────────────────────────────────────────────
-#  Base de données
+#  Database
 # ────────────────────────────────────────────────────────────────
-ci-migrate: ## Crée la BDD de test et exécute les migrations
+ci-migrate: ## Create test DB and run migrations
 	$(call title,CI Database setup)
 	@$(CI_CONSOLE) doctrine:database:create --if-not-exists --env=test
 	@$(CI_CONSOLE) doctrine:migrations:migrate --no-interaction --env=test
 	$(call success,Database ready.)
 
-ci-db-fixtures: ## Charge les fixtures sur la BDD de test
+ci-db-fixtures: ## Load fixtures into test DB
 	$(call title,CI Fixtures)
 	@$(CI_CONSOLE) doctrine:fixtures:load --no-interaction --env=test
 	$(call success,Fixtures loaded.)
 
 # ────────────────────────────────────────────────────────────────
-#  Qualité de code — Linters
+#  Code Quality — Linters
 # ────────────────────────────────────────────────────────────────
-ci-lint: ## Lance tous les linters (cs-check, phpstan, lint-yaml, lint-twig, lint-container)
+ci-lint: ## Run all linters (cs-check, phpstan, lint-yaml, lint-twig, lint-container)
 	$(call title,CI Lint)
 	@$(MAKE) ci-cs-check
 	@$(MAKE) ci-phpstan
@@ -99,48 +99,48 @@ ci-lint: ## Lance tous les linters (cs-check, phpstan, lint-yaml, lint-twig, lin
 	@$(MAKE) ci-lint-container
 	$(call success,All linters passed.)
 
-ci-cs-check: ## PHP CS Fixer — vérification (dry-run)
+ci-cs-check: ## PHP CS Fixer — check (dry-run)
 	$(call title,CI CS Check)
 	@$(CI_PHP) vendor/bin/php-cs-fixer --ansi fix \
 		--show-progress=dots --diff --dry-run \
 		--stop-on-violation
 
-ci-phpstan: ## PHPStan — analyse statique
+ci-phpstan: ## PHPStan — static analysis
 	$(call title,CI PHPStan)
 	@$(CI_PHP) vendor/bin/phpstan --ansi analyse \
 		--memory-limit=512M --no-progress
 
-ci-twigcs: ## TwigCS — lint des templates
+ci-twigcs: ## TwigCS — templates linting
 	$(call title,CI TwigCS)
 	@$(CI_PHP) vendor/bin/twigcs --ansi templates/
 
-ci-lint-yaml: ## Lint des fichiers YAML
+ci-lint-yaml: ## YAML files linting
 	$(call title,CI Lint YAML)
 	@$(CI_CONSOLE) lint:yaml config/ --parse-tags
 
-ci-lint-twig: ## Lint des templates Twig
+ci-lint-twig: ## Twig templates linting
 	$(call title,CI Lint Twig)
 	@$(CI_CONSOLE) lint:twig templates/
 
-ci-lint-container: ## Validation du container de services Symfony
+ci-lint-container: ## Symfony service container validation
 	$(call title,CI Lint Container)
 	@$(CI_CONSOLE) lint:container
 
-ci-security: ## Audit des dépendances Composer (vulnérabilités)
+ci-security: ## Composer dependencies audit (vulnerabilities)
 	$(call title,CI Security Check)
 	@$(CI_EXEC) composer audit
 
 # ────────────────────────────────────────────────────────────────
-#  Tests PHPUnit
+#  PHPUnit Tests
 # ────────────────────────────────────────────────────────────────
-ci-test: ## Lance PHPUnit (env=test, sans coverage)
+ci-test: ## Run PHPUnit (env=test, without coverage)
 	$(call title,CI PHPUnit)
 	@$(CI_PHP) bin/phpunit --ansi \
 		--testdox \
 		$(if $(ARGS),$(ARGS),)
 	$(call success,Tests passed.)
 
-ci-coverage: ## PHPUnit avec rapport de couverture HTML (var/coverage/)
+ci-coverage: ## PHPUnit with HTML coverage report (var/coverage/)
 	$(call title,CI PHPUnit Coverage)
 	@$(CI_EXEC_ROOT) bash -c \
 		"sed -i 's/xdebug.mode=.*/xdebug.mode=coverage/' \
@@ -153,7 +153,7 @@ ci-coverage: ## PHPUnit avec rapport de couverture HTML (var/coverage/)
 		$(if $(ARGS),$(ARGS),)
 	$(call success,Coverage report generated in app/var/coverage/)
 
-ci-coverage-clover: ## PHPUnit avec rapport Clover XML (pour SonarQube / Codecov)
+ci-coverage-clover: ## PHPUnit with Clover XML report (for SonarQube / Codecov)
 	$(call title,CI Coverage Clover)
 	@$(CI_PHP) bin/phpunit --ansi \
 		--coverage-clover var/coverage/clover.xml \
