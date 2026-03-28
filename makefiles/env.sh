@@ -47,6 +47,8 @@ DEFAULT_DB_PORT_POSTGRES=5432
 DEFAULT_PMA_PORT=8081
 DEFAULT_REDIS_PORT=6379
 DEFAULT_PHP_VERSION="8.2"
+SF_VERSION_STABLE="8.0.*"
+SF_VERSION_LTS="7.4.*"
 ENV_FILE=".env.docker"
 CI_ENV_FILE=".env.ci"
 PIPELINE_FILE=".github/workflows/pipeline.yml"
@@ -100,8 +102,10 @@ default_vhost="${project_slug}.docker"
 #  Symfony version
 # ════════════════════════════════════════════════════════════════
 read -r -p "Symfony version [latest stable (stable, default) / latest LTS (lts) / custom (e.g. 7.1.*)] : " symfony_version
-if [ -z "$symfony_version" ]; then
-    symfony_version="stable"
+if [ -z "$symfony_version" ] || [ "$symfony_version" = "stable" ]; then
+  symfony_version="$SF_VERSION_STABLE"
+elif [ "$symfony_version" = "lts" ]; then
+  symfony_version="$SF_VERSION_LTS"
 fi
 
 # ════════════════════════════════════════════════════════════════

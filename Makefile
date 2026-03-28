@@ -15,7 +15,9 @@ help:
 
 .PHONY: install _prepare _setup banner reset _end
 install: banner ## Install and start the project
-	@$(MAKE) _prepare _setup _end
+	@$(MAKE) _prepare
+	@$(MAKE) _setup
+	@$(MAKE) _end
 _prepare: _check-docker _default-ports _env _webserver _docker ## Prepare the environment (check Docker, configure env, generate webserver config, rebuild/start containers)
 _setup: _symfony-app _assets _app-env _deps _update-hosts ## Set up the application (create Symfony app, configure assets and .env.local, install dev dependencies, update hosts)
 _end:

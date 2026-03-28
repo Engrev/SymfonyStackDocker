@@ -28,22 +28,22 @@ _symfony-app: ## Create the Symfony application in ./app
 		$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) 'git config --global user.email "dev@local.host" && git config --global user.name "Dev Local" && git config --global --add safe.directory .'; \
 		if [ "$(DIST)" = "webapp" ]; then \
 			if [ "$(SYMFONY_VERSION)" = "stable" ]; then \
-				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && symfony new _tmp --webapp --no-interaction && shopt -s dotglob && mv _tmp/* . && rmdir _tmp && rm -rf .git" || exit 1; \
+				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && composer create-project symfony/skeleton _tmp --no-interaction && cd _tmp && composer require webapp --no-interaction && cd .. && shopt -s dotglob && mv _tmp/* . && rmdir _tmp && rm -rf .git" || exit 1; \
 			elif [ "$(SYMFONY_VERSION)" = "lts" ]; then \
-				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && symfony new _tmp --version=$(SYMFONY_VERSION) --webapp --no-interaction && shopt -s dotglob && mv _tmp/* . && rmdir _tmp && rm -rf .git" || exit 1; \
+				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && composer create-project symfony/skeleton:'$(SYMFONY_VERSION)' _tmp --no-interaction && cd _tmp && composer require webapp --no-interaction && cd .. && shopt -s dotglob && mv _tmp/* . && rmdir _tmp && rm -rf .git" || exit 1; \
 			else \
-				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && symfony new _tmp --version='$(SYMFONY_VERSION)' --webapp --no-interaction && shopt -s dotglob && mv _tmp/* . && rmdir _tmp && rm -rf .git" || exit 1; \
+				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && composer create-project symfony/skeleton:'$(SYMFONY_VERSION)' _tmp --no-interaction && cd _tmp && composer require webapp --no-interaction && cd .. && shopt -s dotglob && mv _tmp/* . && rmdir _tmp && rm -rf .git" || exit 1; \
 			fi; \
 			if [ "$(WEB_SERVER)" = "apache" ]; then \
 				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "composer require symfony/apache-pack --no-interaction" || exit 1; \
 			fi; \
 		else \
 			if [ "$(SYMFONY_VERSION)" = "stable" ]; then \
-				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && symfony new _tmp --no-interaction && shopt -s dotglob && mv _tmp/* . && rmdir _tmp && rm -rf .git" || exit 1; \
+				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && composer create-project symfony/skeleton _tmp --no-interaction && shopt -s dotglob && mv _tmp/* . && rmdir _tmp && rm -rf .git" || exit 1; \
 			elif [ "$(SYMFONY_VERSION)" = "lts" ]; then \
-				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && symfony new _tmp --version=$(SYMFONY_VERSION) --no-interaction && shopt -s dotglob && mv _tmp/* . && rmdir _tmp && rm -rf .git" || exit 1; \
+				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && composer create-project symfony/skeleton:'$(SYMFONY_VERSION)' _tmp --no-interaction && shopt -s dotglob && mv _tmp/* . && rmdir _tmp && rm -rf .git" || exit 1; \
 			else \
-				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && symfony new _tmp --version='$(SYMFONY_VERSION)' --no-interaction && shopt -s dotglob && mv _tmp/* . && rmdir _tmp && rm -rf .git" || exit 1; \
+				$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "rm -rf _tmp && composer create-project symfony/skeleton:'$(SYMFONY_VERSION)' _tmp --no-interaction && shopt -s dotglob && mv _tmp/* . && rmdir _tmp && rm -rf .git" || exit 1; \
 			fi; \
 			$(DOCKER_COMPOSE_EXEC_NO_TTY) php $(WITH_BASH) "composer require api --no-interaction" || exit 1; \
 		fi; \

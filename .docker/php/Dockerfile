@@ -6,7 +6,7 @@ ARG GROUP_ID=1000
 
 RUN echo "Building with USER_ID=${USER_ID}, GROUP_ID=${GROUP_ID}, PHP_VERSION=${PHP_VERSION}"
 
-# Packages système
+# System packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl wget git unzip zip \
     libzip-dev libpng-dev libjpeg62-turbo-dev libwebp-dev \
@@ -17,10 +17,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libfcgi-bin \
     && rm -rf /var/lib/apt/lists/*
 
-# Ajuster l'ID de www-data pour correspondre à l'utilisateur hôte (évite les conflits de permission)
-RUN usermod -u ${USER_ID} www-data && groupmod -g ${GROUP_ID} www-data
+# Adjust www-data ID to match host user (prevents permission conflicts)
+RUN usermod -u ${USER_ID} -s /bin/bash www-data && groupmod -g ${GROUP_ID} www-data
 
-# Extensions PHP
+# PHP Extensions
 RUN docker-php-ext-configure gd \
     --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j$(nproc) \
@@ -34,7 +34,7 @@ RUN docker-php-ext-configure gd \
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 RUN curl -fsSL https://get.symfony.com/cli/installer | bash -s -- --install-dir=/usr/local/bin
 
-# Configuration PHP via ini files
+# PHP configuration via ini files
 COPY .docker/php/conf/php.ini /usr/local/etc/php/conf.d/99-symfony.ini
 COPY .docker/php/conf/opcache.ini /usr/local/etc/php/conf.d/98-opcache.ini
 COPY .docker/php/conf/apcu.ini /usr/local/etc/php/conf.d/97-apcu.ini
@@ -52,7 +52,7 @@ USER www-data
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD SCRIPT_NAME=/ping SCRIPT_FILENAME=/ping cgi-fcgi -bind -connect 127.0.0.1:9000 || exit 1
 
-# Exposer le port PHP-FPM
+# Expose PHP-FPM port
 EXPOSE 9000
 
 CMD ["php-fpm"]
