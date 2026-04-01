@@ -39,7 +39,7 @@ Il faut également l'ajouter dans **/home/\<user>/.ssh/authorized_keys**.
 │   │   ├── releases/
 │   │   │   ├── YYYYMMDD_Hi2/
 │   │   │   └── YYYYMMDD_Hi1/
-│   │   └── shared/   # logs, cache, sessions, uploads, .env.local
+│   │   └── shared/   # logs, cache, sessions, uploads, .env.local.php
 │   └── pprod/
 │       ├── current -> releases/YYYYMMDD_Hi2/
 │       ├── releases/

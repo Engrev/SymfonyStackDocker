@@ -46,7 +46,10 @@ on:
             - refactor/**
             - perf/**
             - test/**
-            - core/**
+            - chore/**
+            - build/**
+            - ci/**
+            - revert/**
             - release
             - main
     pull_request:
@@ -59,12 +62,12 @@ concurrency:
     cancel-in-progress: true
 
 env:
-    PHP_VERSION: "8.2"
+    PHP_VERSION: "8.4"
     DB_ENGINE: "mariadb"
     DB_COMPOSE_PROFILE: "ci-mariadb"
     DB_PORT: "3306"
-    DB_URL: "mysql://app_test:app_test_pass@db-mariadb:3306/app_test?serverVersion=11.8.6-MariaDB&charset=utf8mb4"
-    PROJECT_SLUG: "symfony-app"
+    DB_URL: "mysql://root:app_test_pass@db-mariadb:3306/app_test?serverVersion=11.8.6-MariaDB&charset=utf8mb4"
+    PROJECT_SLUG: "eventcontrolcenter"
     APP_DB_NAME: "app_test"
     APP_DB_USER: "app_test"
     APP_DB_PASSWORD: "app_test_pass"
@@ -80,18 +83,18 @@ jobs:
                 include:
                     # Values to keep synchronized with env: above.
                     # GitHub Actions does not allow ${{ env.* }} in matrix:.
-                    - php-version: "8.2"
+                    - php-version: "8.4"
                       db: "mariadb"
                       compose-profile: "ci-mariadb"
                       db-port: "3306"
-                      db-url: "mysql://app_test:app_test_pass@db-mariadb:3306/app_test?serverVersion=11.8.6-MariaDB&charset=utf8mb4"
+                      db-url: "mysql://root:app_test_pass@db-mariadb:3306/app_test?serverVersion=11.8.6-MariaDB&charset=utf8mb4"
                     
                     # Décommentez pour PHP 8.3 :
                     # - php-version: "8.3"
                     #   db: "mariadb"
                     #   compose-profile: "ci-mariadb"
                     #   db-port: "3306"
-                    #   db-url: "mysql://app_test:app_test_pass@db-mariadb:3306/app_test?serverVersion=11.8.6-MariaDB&charset=utf8mb4"
+                    #   db-url: "mysql://root:app_test_pass@db-mariadb:3306/app_test?serverVersion=11.8.6-MariaDB&charset=utf8mb4"
                     
                     # Décommentez pour PostgreSQL :
                     # - php-version: "8.2"
@@ -139,6 +142,8 @@ jobs:
                   APP_DB_PASSWORD=${{ env.APP_DB_PASSWORD }}
                   DB_INTERNAL_PORT=${{ matrix.db-port }}
                   CI_DATABASE_URL=${{ matrix.db-url }}
+                  USER_ID=$(id -u)
+                  GROUP_ID=$(id -g)
                   EOF
             
             - name: "Build PHP CI image"
@@ -271,6 +276,8 @@ jobs:
                   APP_DB_PASSWORD=${{ env.APP_DB_PASSWORD }}
                   DB_INTERNAL_PORT=${{ env.DB_PORT }}
                   CI_DATABASE_URL=${{ env.DB_URL }}
+                  USER_ID=$(id -u)
+                  GROUP_ID=$(id -g)
                   EOF
             
             - name: "Build CI image"
@@ -278,26 +285,48 @@ jobs:
               env:
                   DOCKER_BUILDKIT: 1
             
-            - name: "Composer install (prod, no-dev)"
+            - name: "Composer install"
               run: |
                   make ci-up
-                  docker compose -f docker-compose.ci.yml \
-                      --env-file .env.ci exec -T --user=www-data:www-data php \
-                      composer install --no-dev --optimize-autoloader --classmap-authoritative --no-interaction
+                  make ci-install
             
             - name: "Setup SSH"
               run: |
                   mkdir -p ~/.ssh
-                  chmod 700 ~/.ssh
-                  echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_ed25519
-                  chmod 600 ~/.ssh/id_ed25519
+                  echo "${{ secrets.DEPLOY_KEY }}" | tr -d '\r' > ~/.ssh/id_deploy
+                  chmod 600 ~/.ssh/id_deploy
+                  if [ -n "${{ secrets.DEPLOY_PASSPHRASE }}" ]; then
+                    if ! ssh-keygen -y -P "" -f ~/.ssh/id_deploy >/dev/null 2>&1; then
+                      ssh-keygen -p -P "${{ secrets.DEPLOY_PASSPHRASE }}" -N "" -f ~/.ssh/id_deploy
+                    fi
+                  fi
+                  eval $(ssh-agent -s)
+                  ssh-add ~/.ssh/id_deploy
+                  echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
+                  echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> $GITHUB_ENV
+
+            - name: "Setup Known Hosts"
+              run: |
+                  mkdir -p ~/.ssh
                   ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+            - name: "Test SSH Connection"
+              run: |
+                  ssh -T -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "echo SSH connection OK"
+            
+            - name: "Setup PHP ${{ env.PHP_VERSION }} for deploy"
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: ${{ env.PHP_VERSION }}
+                  coverage: none
             
             - name: "Deploy to pprod"
+              #run: |
+              #    docker compose -f docker-compose.ci.yml \
+              #        --env-file .env.ci exec -T --user=www-data:www-data php \
+              #        vendor/bin/dep deploy pprod --no-interaction -vv
               run: |
-                  docker compose -f docker-compose.ci.yml \
-                      --env-file .env.ci exec -T --user=www-data:www-data php \
-                      vendor/bin/dep deploy pprod --no-interaction -vv
+                  php app/vendor/bin/dep deploy pprod --no-interaction -vv
               env:
                   DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
                   DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -305,6 +334,19 @@ jobs:
                   HEALTHCHECK_URL_PPROD: https://${{ vars.DOMAIN_PPROD }}/health
                   SERVER_PHP_BIN: ${{ vars.SERVER_PHP_BIN }}
                   SERVER_COMPOSER_BIN: ${{ vars.SERVER_COMPOSER_BIN }}
+                  SERVER_HTTP_USER: ${{ vars.SERVER_HTTP_USER }}
+                  APP_SECRET: ${{ secrets.APP_SECRET }}
+                  DB_HOST: ${{ secrets.DB_HOST }}
+                  DB_PORT: ${{ secrets.DB_PORT }}
+                  DB_NAME: ${{ secrets.DB_NAME }}
+                  DB_USER: ${{ secrets.DB_USER }}
+                  DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+                  DB_OPTIONS: ${{ vars.DB_OPTIONS }}
+                  MESSENGER_TRANSPORT_DSN: ${{ vars.MESSENGER_TRANSPORT_DSN }}
+                  MAILER_DSN_HOST: ${{ secrets.DB_HOST }}
+                  MAILER_DSN_PORT: ${{ secrets.DB_PORT }}
+                  MAILER_DSN_USER: ${{ secrets.DB_USER }}
+                  MAILER_DSN_PASSWORD: ${{ secrets.DB_PASSWORD }}
             
             - name: "Stop CI containers"
               if: always()
@@ -374,6 +416,8 @@ jobs:
                   APP_DB_PASSWORD=${{ env.APP_DB_PASSWORD }}
                   DB_INTERNAL_PORT=${{ env.DB_PORT }}
                   CI_DATABASE_URL=${{ env.DB_URL }}
+                  USER_ID=$(id -u)
+                  GROUP_ID=$(id -g)
                   EOF
             
             - name: "Build CI image"
@@ -381,26 +425,48 @@ jobs:
               env:
                   DOCKER_BUILDKIT: 1
             
-            - name: "Composer install (prod, no-dev)"
+            - name: "Composer install"
               run: |
                   make ci-up
-                  docker compose -f docker-compose.ci.yml \
-                      --env-file .env.ci exec -T --user=www-data:www-data php \
-                      composer install --no-dev --optimize-autoloader --classmap-authoritative --no-interaction
+                  make ci-install
             
             - name: "Setup SSH"
               run: |
                   mkdir -p ~/.ssh
-                  chmod 700 ~/.ssh
-                  echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_ed25519
-                  chmod 600 ~/.ssh/id_ed25519
+                  echo "${{ secrets.DEPLOY_KEY }}" | tr -d '\r' > ~/.ssh/id_deploy
+                  chmod 600 ~/.ssh/id_deploy
+                  if [ -n "${{ secrets.DEPLOY_PASSPHRASE }}" ]; then
+                    if ! ssh-keygen -y -P "" -f ~/.ssh/id_deploy >/dev/null 2>&1; then
+                      ssh-keygen -p -P "${{ secrets.DEPLOY_PASSPHRASE }}" -N "" -f ~/.ssh/id_deploy
+                    fi
+                  fi
+                  eval $(ssh-agent -s)
+                  ssh-add ~/.ssh/id_deploy
+                  echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
+                  echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> $GITHUB_ENV
+
+            - name: "Setup Known Hosts"
+              run: |
+                  mkdir -p ~/.ssh
                   ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+            - name: "Test SSH Connection"
+              run: |
+                  ssh -T -o StrictHostKeyChecking=no -o BatchMode=yes -o ConnectTimeout=5 ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "echo SSH connection OK"
+            
+            - name: "Setup PHP ${{ env.PHP_VERSION }} for deploy"
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: ${{ env.PHP_VERSION }}
+                  coverage: none
             
             - name: "Deploy to prod"
+              #run: |
+              #    docker compose -f docker-compose.ci.yml \
+              #        --env-file .env.ci exec -T --user=www-data:www-data php \
+              #        vendor/bin/dep deploy prod --no-interaction -vv
               run: |
-                  docker compose -f docker-compose.ci.yml \
-                      --env-file .env.ci exec -T --user=www-data:www-data php \
-                      vendor/bin/dep deploy prod --no-interaction -vv
+                  php app/vendor/bin/dep deploy prod --no-interaction -vv
               env:
                   DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
                   DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -408,6 +474,19 @@ jobs:
                   HEALTHCHECK_URL_PROD: https://${{ vars.DOMAIN_PROD }}/health
                   SERVER_PHP_BIN: ${{ vars.SERVER_PHP_BIN }}
                   SERVER_COMPOSER_BIN: ${{ vars.SERVER_COMPOSER_BIN }}
+                  SERVER_HTTP_USER: ${{ vars.SERVER_HTTP_USER }}
+                  APP_SECRET: ${{ secrets.APP_SECRET }}
+                  DB_HOST: ${{ secrets.DB_HOST }}
+                  DB_PORT: ${{ secrets.DB_PORT }}
+                  DB_NAME: ${{ secrets.DB_NAME }}
+                  DB_USER: ${{ secrets.DB_USER }}
+                  DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+                  DB_OPTIONS: ${{ vars.DB_OPTIONS }}
+                  MESSENGER_TRANSPORT_DSN: ${{ vars.MESSENGER_TRANSPORT_DSN }}
+                  MAILER_DSN_HOST: ${{ secrets.DB_HOST }}
+                  MAILER_DSN_PORT: ${{ secrets.DB_PORT }}
+                  MAILER_DSN_USER: ${{ secrets.DB_USER }}
+                  MAILER_DSN_PASSWORD: ${{ secrets.DB_PASSWORD }}
             
             - name: "Stop CI containers"
               if: always()

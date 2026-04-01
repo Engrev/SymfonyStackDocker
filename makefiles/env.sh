@@ -103,9 +103,9 @@ default_vhost="${project_slug}.docker"
 # ════════════════════════════════════════════════════════════════
 read -r -p "Symfony version [latest stable (stable, default) / latest LTS (lts) / custom (e.g. 7.1.*)] : " symfony_version
 if [ -z "$symfony_version" ] || [ "$symfony_version" = "stable" ]; then
-  symfony_version="$SF_VERSION_STABLE"
+    symfony_version="$SF_VERSION_STABLE"
 elif [ "$symfony_version" = "lts" ]; then
-  symfony_version="$SF_VERSION_LTS"
+    symfony_version="$SF_VERSION_LTS"
 fi
 
 # ════════════════════════════════════════════════════════════════

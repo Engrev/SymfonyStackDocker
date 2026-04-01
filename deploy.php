@@ -28,7 +28,7 @@
  *                20250310_091500/   ← previous release
  *            current -> releases/20250311_143000  (symlink)
  *            shared/
- *                .env.local         ← to be created manually once
+ *                .env.local.php     ← to be created manually once (or generated)
  *                var/
  *                    log/
  *                    sessions/
@@ -41,12 +41,10 @@
 
 namespace Deployer;
 
-require 'vendor/autoload.php';
-
-use Deployer\Exception\RunException;
+require 'app/vendor/autoload.php';
 
 // ── Official Symfony Recipe ─────────────────────────────────────
-require 'vendor/deployer/deployer/recipe/symfony.php';
+require 'app/vendor/deployer/deployer/recipe/symfony.php';
 
 // ════════════════════════════════════════════════════════════════
 // Common configuration
@@ -61,21 +59,23 @@ set('repository', '');
 
 // Shared files across all releases (unversioned)
 set('shared_files', [
-    '.env.local',
+    '.env.local.php',
 ]);
 
-// Shared dossiers across all releases
+// Shared dirs across all releases
 set('shared_dirs', [
-    'var/log',
+    'var/logs',
     'var/sessions',
     'public/uploads',
 ]);
 
 // Directories with write permissions for the web process
 set('writable_dirs', [
+    'var',
     'var/cache',
-    'var/log',
+    'var/logs',
     'var/sessions',
+    'public',
     'public/uploads',
 ]);
 
@@ -89,6 +89,18 @@ set('bin/composer', function () {
     return getenv('SERVER_COMPOSER_BIN') ?: '/opt/php8.4/bin/composer2.phar';
 });
 
+// User of the web server — override possible via env variable
+set('http_user', function () {
+    return getenv('SERVER_HTTP_USER') ?: 'www-data';
+});
+
+// Environment variables for remote commands (ensure Symfony runs in the right mode)
+set('env', function () {
+    return [
+        'APP_ENV' => get('symfony_env', 'prod'),
+    ];
+});
+
 // ════════════════════════════════════════════════════════════════
 //  Hosts
 // ════════════════════════════════════════════════════════════════
@@ -100,36 +112,160 @@ $deployBase  = getenv('DEPLOY_BASE_PATH') ?: '/home/clients/xxx/sites/mon-projet
 host('pprod')
     ->setHostname($deployHost)
     ->setRemoteUser($deployUser)
-    ->setIdentityFile('~/.ssh/id_ed25519')
     ->set('deploy_path', $deployBase . '/pprod')
     ->set('symfony_env', 'prod')      // Symfony runs in prod even in pprod
     ->set('branch', 'release')        // Deployed from the release branch
-    ->set('labels', ['env' => 'pprod']);
+    ->set('labels', ['env' => 'pprod'])
+    ->set('healthcheck_url', getenv('HEALTHCHECK_URL_PPROD') ?: '')
+;
 
 host('prod')
     ->setHostname($deployHost)
     ->setRemoteUser($deployUser)
-    ->setIdentityFile('~/.ssh/id_ed25519')
     ->set('deploy_path', $deployBase . '/prod')
     ->set('symfony_env', 'prod')
     ->set('branch', 'main')           // Deployed from the main branch
-    ->set('labels', ['env' => 'prod']);
+    ->set('labels', ['env' => 'prod'])
+    ->set('healthcheck_url', getenv('HEALTHCHECK_URL_PROD') ?: '')
+;
 
 // ════════════════════════════════════════════════════════════════
 //  Custom tasks
 // ════════════════════════════════════════════════════════════════
+
+// ── Upload app files in CI ──────────────────────────────────────
+task('deploy:update_code', function () {
+    upload('app/', '{{release_path}}', [
+        'options' => [
+            '--exclude=.git',
+            '--exclude=vendor',      // The vendors will be installed on the server via deploy:vendors
+            '--exclude=var',
+            '--exclude=node_modules',
+            '--exclude=.editorconfig',
+        ],
+    ]);
+});
 
 // ── Upload of compiled assets in CI ─────────────────────────────
 // The assets are built in CI and uploaded via rsync
 // We do NOT build on the server (no Node required)
 desc('Upload compiled assets to release');
 task('deploy:upload_assets', function () {
-    $localAssets = 'public/build/';
+    $localAssets = 'app/public/build/';
     if (!is_dir($localAssets)) {
         info('No compiled assets found in public/build/, skipping upload.');
         return;
     }
     upload($localAssets, '{{release_path}}/public/build/');
+});
+
+// ── Generate .env.local.php from GitHub Secrets ─────────────────
+desc('Generate .env.local.php from environment variables');
+task('deploy:secrets', function () {
+    // Check if file already exists on the server
+    if (run("if [ -f {{deploy_path}}/shared/.env.local.php ]; then echo 'exists'; else echo 'missing'; fi") === 'exists') {
+        info('ℹ️ .env.local.php already exists in shared/, skipping generation.');
+        return;
+    }
+
+    $appSecret = getenv('APP_SECRET') ?: bin2hex(random_bytes(16));
+    $dbUser = getenv('DB_USER');
+    $dbPass = getenv('DB_PASSWORD');
+    $dbHost = getenv('DB_HOST') ?: '127.0.0.1';
+    $dbPort = getenv('DB_PORT') ?: '3306';
+    $dbName = getenv('DB_NAME');
+    $dbOptions = getenv('DB_OPTIONS') ?: 'serverVersion=10.11.15-MariaDB&charset=utf8mb4';
+    $messengerTransportDsn = getenv('MESSENGER_TRANSPORT_DSN') ?: 'doctrine://default?auto_setup=0';
+    $mailerDsnUser = getenv('MAILER_DSN_USER');
+    $mailerDsnPass = getenv('MAILER_DSN_PASSWORD');
+    $mailerDsnHost = getenv('MAILER_DSN_HOST') ?: '127.0.0.1';
+    $mailerDsnPort = getenv('MAILER_DSN_PORT') ?: '587';
+
+    if (!$dbUser || !$dbPass || !$dbName) {
+        info('Missing database secrets (DB_USER, DB_PASSWORD, DB_NAME), skipping .env.local.php generation.');
+        return;
+    }
+    if (!$mailerDsnUser || !$mailerDsnPass || !$mailerDsnHost) {
+        info('Missing mailer secrets (MAILER_DSN_USER, MAILER_DSN_PASSWORD, MAILER_DSN_HOST), skipping .env.local.php generation.');
+        return;
+    }
+
+    $dbUrl = "mysql://$dbUser:$dbPass@$dbHost:$dbPort/$dbName?$dbOptions";
+    $mailerDsn = "smtp://$mailerDsnUser:$mailerDsnPass@$mailerDsnHost:$mailerDsnPort";
+
+    $content = "<?php\n\nreturn [\n";
+    $content .= "    'APP_ENV' => 'prod',\n";
+    $content .= "    'APP_SECRET' => '$appSecret',\n";
+    $content .= "    'APP_SHARE_DIR' => 'var/share',\n";
+    $content .= "    'DEFAULT_URI' => 'http://localhost',\n";
+    $content .= "    'DATABASE_URL' => '$dbUrl',\n";
+    $content .= "    'MESSENGER_TRANSPORT_DSN' => '$messengerTransportDsn',\n";
+    $content .= "    'MAILER_DSN' => '$mailerDsn',\n";
+    $content .= "];\n";
+
+    $tmpFile = tempnam(sys_get_temp_dir(), 'env');
+    file_put_contents($tmpFile, $content);
+    
+    run("mkdir -p {{deploy_path}}/shared");
+    upload($tmpFile, '{{deploy_path}}/shared/.env.local.php');
+    
+    unlink($tmpFile);
+    info('✅ .env.local.php generated in shared/');
+});
+
+// ── Check environment ───────────────────────────────────────────
+desc('Check environment and PHP extensions');
+task('deploy:check', function () {
+    $php = get('bin/php');
+    info("Checking PHP binary: $php");
+    run("$php -v");
+    info("Checking PDO drivers:");
+    $drivers = run("$php -r 'echo implode(\", \", PDO::getAvailableDrivers());'");
+    info("Available drivers: $drivers");
+    
+    if (str_contains($drivers, 'pgsql')) {
+        info("✅ PostgreSQL driver found.");
+    } else {
+        info("❌ PostgreSQL driver NOT found.");
+    }
+    
+    if (str_contains($drivers, 'mysql')) {
+        info("✅ MySQL driver found.");
+    } else {
+        info("❌ MySQL driver NOT found.");
+    }
+
+    info("Checking configuration file (.env.local.php) in shared/:");
+    $exists = run("if [ -f {{deploy_path}}/shared/.env.local.php ]; then echo 'exists'; else echo 'missing'; fi");
+    if ($exists === 'exists') {
+        info("✅ .env.local.php found in shared/.");
+        
+        // Tentative de diagnostic de connexion DB si possible
+        info("Checking database connection from .env.local.php...");
+        $testDb = run("$php -r \"
+            \\\$env = @include '{{deploy_path}}/shared/.env.local.php';
+            if (!is_array(\\\$env) || !isset(\\\$env['DATABASE_URL'])) {
+                echo 'DATABASE_URL not found in .env.local.php';
+                exit;
+            }
+            \\\$url = \\\$env['DATABASE_URL'];
+            \\\$parts = parse_url(\\\$url);
+            \\\$host = \\\$parts['host'] ?? '127.0.0.1';
+            \\\$port = \\\$parts['port'] ?? 3306;
+            
+            echo 'Testing connection to ' . \\\$host . ':' . \\\$port . '... ';
+            \\\$connection = @fsockopen(\\\$host, \\\$port, \\\$errno, \\\$errstr, 2);
+            if (is_resource(\\\$connection)) {
+                echo '✅ SUCCESS: Port is open.';
+                fclose(\\\$connection);
+            } else {
+                echo '❌ FAILED: ' . \\\$errstr . ' (' . \\\$errno . ')';
+            }
+        \"");
+        info($testDb);
+    } else {
+        info("❌ .env.local.php MISSING in shared/! Ensure you have set the DB secrets in GitHub or created the file manually.");
+    }
 });
 
 // ── Migrations Doctrine ─────────────────────────────────────────
@@ -180,15 +316,6 @@ task('deploy:notify', function () {
 });
 
 // ════════════════════════════════════════════════════════════════
-//  Healthcheck URLs par environnement
-// ════════════════════════════════════════════════════════════════
-
-// Enter the healthcheck URLs (endpoint to be created in Symfony)
-// Route: /health → returns 200 OK
-localhost('pprod')->set('healthcheck_url', getenv('HEALTHCHECK_URL_PPROD') ?: '');
-localhost('prod')->set('healthcheck_url', getenv('HEALTHCHECK_URL_PROD') ?: '');
-
-// ════════════════════════════════════════════════════════════════
 //  Deployment pipeline scheduling
 // ════════════════════════════════════════════════════════════════
 
@@ -197,10 +324,11 @@ localhost('prod')->set('healthcheck_url', getenv('HEALTHCHECK_URL_PROD') ?: '');
  *
  *  deploy:info
  *  deploy:setup          ← crée releases/, shared/, current/ si inexistants
+ *  deploy:check          ← vérifie drivers PHP et .env.local.php (diagnostic)
  *  deploy:lock           ← verrou anti-déploiement concurrent
  *  deploy:release        ← crée releases/YYYYMMDD_HHMMSS/
  *  deploy:update_code    ← copie le code (depuis CI, pas git clone)
- *  deploy:shared         ← symlinks vers shared/ (.env.local, var/log…)
+ *  deploy:shared         ← symlinks vers shared/ (.env.local.php, var/log…)
  *  deploy:writable       ← chmod sur var/
  *  deploy:vendors        ← composer install --no-dev --optimize-autoloader
  *  deploy:upload_assets  ← upload public/build/ depuis CI  (custom)
@@ -216,11 +344,13 @@ localhost('prod')->set('healthcheck_url', getenv('HEALTHCHECK_URL_PROD') ?: '');
  *  deploy:success        ← affichage final
  */
 
-after('deploy:vendors',     'deploy:upload_assets');
+after('deploy:setup', 'deploy:secrets');
+after('deploy:secrets', 'deploy:check');
+after('deploy:vendors', 'deploy:upload_assets');
 after('deploy:upload_assets', 'deploy:migrate');
-after('deploy:migrate',     'deploy:permissions');
-after('deploy:symlink',     'deploy:healthcheck');
+after('deploy:migrate', 'deploy:permissions');
+after('deploy:symlink', 'deploy:healthcheck');
 after('deploy:healthcheck', 'deploy:notify');
 
 // In case of failure: automatic rollback
-after('deploy:failed',      'deploy:unlock');
+after('deploy:failed', 'deploy:unlock');

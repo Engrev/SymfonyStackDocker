@@ -1,7 +1,5 @@
-.idea
-.docker/web/apache/vhost.conf
-.docker/web/nginx/vhost.conf
-app
-var
-.env
-.env.docker
+/.idea/
+/.env
+/.env.docker
+/.php-cs-fixer.cache
+/app/.editorconfig

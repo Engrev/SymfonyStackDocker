@@ -164,7 +164,7 @@ terminal-root: ## Open an interactive root shell in the PHP container
 .PHONY: composer composer-install composer-update composer-dump-autoload composer-outdated
 composer: ## Execute a Composer command inside the PHP container; pass extra args with ARGS="require..."
 	$(call title,Composer)
-	@$(COMPOSER) $(ARGS)
+	$(COMPOSER) $(ARGS)
 
 composer-install: ## Install PHP dependencies
 	$(call title,Composer install)
@@ -216,7 +216,7 @@ npm: ## Run an npm command inside the NPM container; pass extra args with ARGS="
 	$(NPM) $(ARGS)
 npm-install: ## Install Node dependencies (npm install) inside the NPM container
 	$(call title,NPM install)
-	$(NPM) install
+	@$(NPM) install
 webpack: ## Build assets (Encore)
 	$(call title,Webpack dev)
 	@if [ "$$APP_ENV" = "dev" ]; then \
@@ -244,7 +244,7 @@ webpack-build: ## Build assets in production mode (minified)
 .PHONY: tests php-cs-check php-cs-fixer phpstan phpunit phpunit-coverage twigcs lint-yaml lint-twig lint-container eslint eslint-fix security-check
 tests: ## Run all tests
 	$(call title,Run all tests)
-	@$(MAKE) php-cs-check phpstan lint-yaml lint-twig phpunit
+	@$(MAKE) php-cs-check phpstan phpunit twigcs lint-yaml lint-twig
 
 php-cs-check: ## Check PHP coding standards with php-cs-fixer (dry-run)
 	$(call title,PHP CS Fixer check)
@@ -260,35 +260,35 @@ phpstan: ## Run PHPStan static analysis
 
 phpunit: ## Run PHPUnit tests
 	$(call title,PHPUnit)
-	@$(PHP) bin/phpunit --ansi $(ARGS)
+	$(PHP) bin/phpunit $(ARGS)
 
 phpunit-coverage: ## Run PHPUnit tests with code coverage report (HTML)
 	$(call title,PHPUnit)
-	@$(PHP) bin/phpunit --ansi --coverage-html var/coverage $(ARGS)
+	@$(PHP) bin/phpunit --coverage-html var/coverage $(ARGS)
 
 twigcs: ## Check Twig coding standards with twigcs
 	$(call title,Twig CS)
-	$(PHP) vendor/bin/twigcs --ansi templates/
+	@$(PHP) vendor/bin/twigcs --ansi templates/
 
 lint-yaml: ## Lint YAML configuration files
 	$(call title,Lint YAML)
-	$(SF_CONSOLE) --ansi lint:yaml config/ --parse-tags
+	@$(SF_CONSOLE) --ansi lint:yaml config/ --parse-tags
 
 lint-twig: ## Lint Twig templates
 	$(call title,Lint Twig)
-	$(SF_CONSOLE) --ansi lint:twig templates/
+	@$(SF_CONSOLE) --ansi lint:twig templates/
 
 lint-container: ## Lint services container
 	$(call title,Lint container)
-	$(SF_CONSOLE) --ansi lint:container
+	@$(SF_CONSOLE) --ansi lint:container
 
 eslint: ## Run ESLint on frontend assets
 	$(call title,ESLint)
-	$(DOCKER_COMPOSE_EXEC) node ./node_modules/.bin/eslint assets/ --ext .js,.ts,.vue
+	@$(DOCKER_COMPOSE_EXEC) node ./node_modules/.bin/eslint assets/ --ext .js,.ts,.vue
 
 eslint-fix: ## Run ESLint with --fix to automatically fix issues in frontend assets
 	$(call title,ESLint Fix)
-	$(DOCKER_COMPOSE_EXEC) node ./node_modules/.bin/eslint assets/ --ext .js,.ts,.vue --fix
+	@$(DOCKER_COMPOSE_EXEC) node ./node_modules/.bin/eslint assets/ --ext .js,.ts,.vue --fix
 
 security-check: ## Run Symfony security checker to check for known vulnerabilities in PHP dependencies
 	$(call title,Security Check)

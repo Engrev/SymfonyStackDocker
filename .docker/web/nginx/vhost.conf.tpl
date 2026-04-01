@@ -7,13 +7,13 @@ server {
 
     # Logs
     access_log /var/log/nginx/access.log;
-    error_log  /var/log/nginx/error.log;
+    error_log /var/log/nginx/error.log;
 
     # Assets statiques
     location ~* \.(ico|css|js|gif|jpeg|jpg|png|webp|svg|woff|woff2|ttf|eot)$ {
         expires 1y;
         add_header Cache-Control "public, immutable";
-        try_files  $uri =404;
+        try_files $uri =404;
     }
 
     # Symfony front controller

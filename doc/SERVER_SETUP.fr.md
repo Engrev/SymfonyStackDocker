@@ -72,7 +72,7 @@ mon-projet/
 │   │   └── 20250310_091500/
 │   ├── current -> releases/20250311_143000   ← symlink géré par Deployer
 │   └── shared/
-│       ├── .env.local
+│       ├── .env.local.php
 │       ├── var/log/
 │       ├── var/sessions/
 │       └── public/uploads/
@@ -82,29 +82,48 @@ mon-projet/
 
 ---
 
-## 4. Créer les fichiers `.env.local` sur le serveur
+## 4. Gérer le fichier `.env.local.php` sur le serveur
 
-> ⚠️ Ces fichiers contiennent les **vrais credentials**. Ils ne doivent jamais être versionnés dans Git.
+> ⚠️ Ce fichier contient les **vrais credentials**. Ils ne doivent jamais être versionnés dans Git.
+> Note : Symfony recommande d'utiliser un fichier PHP pour de meilleures performances en production (généré via `composer dump-env prod`).
 
-### Production
+### Option A : Génération automatique via GitHub Secrets (Recommandé)
+
+Le pipeline de déploiement est configuré pour générer automatiquement ce fichier à partir des secrets définis dans GitHub (voir étape 6). Cela évite de manipuler manuellement des fichiers sur le serveur.
+
+### Option B : Création manuelle sur le serveur
+
+Si vous ne définissez pas les secrets de base de données dans GitHub, vous devez créer le fichier manuellement :
+
+#### Production
 
 ```bash
-cat > "$APP_BASE/prod/shared/.env.local" <<'ENV'
-APP_SECRET=votre_secret_prod_ici
-DATABASE_URL=mysql://user:password@localhost:3306/db_prod?serverVersion=11.8.6-MariaDB&charset=utf8mb4
-MAILER_DSN=smtp://user:pass@smtp.server.com:587
-# ... autres variables sensibles
-ENV
+# Exemple de contenu pour .env.local.php (doit retourner un tableau)
+cat > "$APP_BASE/prod/shared/.env.local.php" <<'PHP'
+<?php
+
+return [
+    'APP_ENV' => 'prod',
+    'APP_SECRET' => 'votre_secret_prod_ici',
+    'DATABASE_URL' => 'mysql://user:password@localhost:3306/db_prod?serverVersion=11.8.6-MariaDB&charset=utf8mb4',
+    'MAILER_DSN' => 'smtp://user:pass@smtp.server.com:587',
+];
+PHP
 ```
 
-### Pré-production
+#### Pré-production
 
 ```bash
-cat > "$APP_BASE/pprod/shared/.env.local" <<'ENV'
-APP_SECRET=votre_secret_pprod_ici
-DATABASE_URL=mysql://user:password@localhost:3306/db_pprod?serverVersion=11.8.6-MariaDB&charset=utf8mb4
-MAILER_DSN=smtp://user:pass@smtp.server.com:587
-ENV
+cat > "$APP_BASE/pprod/shared/.env.local.php" <<'PHP'
+<?php
+
+return [
+    'APP_ENV' => 'prod',
+    'APP_SECRET' => 'votre_secret_pprod_ici',
+    'DATABASE_URL' => 'mysql://user:password@localhost:3306/db_pprod?serverVersion=11.8.6-MariaDB&charset=utf8mb4',
+    'MAILER_DSN' => 'smtp://user:pass@smtp.server.com:587',
+];
+PHP
 ```
 
 ---
@@ -163,6 +182,12 @@ Même configuration, en remplaçant :
 | `SMTP_PORT` | Port SMTP | `587` |
 | `SMTP_USERNAME` | Identifiant SMTP | `user@server.com` |
 | `SMTP_PASSWORD` | Mot de passe SMTP | `xxx` |
+| `DB_HOST` | Hôte de la base de données | `127.0.0.1` |
+| `DB_PORT` | Port de la base de données | `3306` |
+| `DB_NAME` | Nom de la base de données | `mon_app_db` |
+| `DB_USER` | Utilisateur de la base de données | `mon_app_user` |
+| `DB_PASSWORD` | Mot de passe de la base de données | `mon_secret_db` |
+| `APP_SECRET` | Secret Symfony (optionnel) | `a8f9...` |
 
 ### Variables — `Settings → Secrets and variables → Actions → Variables`
 
@@ -220,7 +245,7 @@ Si la commande retourne `OK`, la configuration est correcte.
 | 1 | Créer l'utilisateur `deployer` | Serveur |
 | 2 | Générer et déposer la clé SSH | Local + Serveur + GitHub |
 | 3 | Créer la structure des dossiers | Serveur |
-| 4 | Créer les `.env.local` | Serveur |
+| 4 | Créer les `.env.local.php` | Serveur |
 | 5 | Configurer Nginx | Serveur |
 | 6 | Ajouter secrets et variables | GitHub |
 | 7 | Configurer les environnements GitHub | GitHub |

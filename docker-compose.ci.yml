@@ -21,8 +21,8 @@ services:
             dockerfile: .docker/php/Dockerfile
             args:
                 PHP_VERSION: ${PHP_VERSION:-8.2}
-                USER_ID: 1000
-                GROUP_ID: 1000
+                USER_ID: ${USER_ID:-1000}
+                GROUP_ID: ${GROUP_ID:-1000}
         environment:
             APP_ENV: test
             COMPOSER_CACHE_DIR: /composer/cache

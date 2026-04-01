@@ -49,9 +49,7 @@ ci-build: ## Build the PHP image for CI
 
 ci-up: ## Start CI containers (detached)
 	$(call title,CI Up)
-	@$(DOCKER_COMPOSE_CI) up -d --remove-orphans
-	@printf "$(CYAN)Waiting for services to be healthy...$(RESET)\n"
-	@$(DOCKER_COMPOSE_CI) wait php || true
+	@$(DOCKER_COMPOSE_CI) up -d --wait --remove-orphans
 	$(call success,CI containers started.)
 
 ci-down: ## Stop and remove CI containers
@@ -70,7 +68,8 @@ ci-logs: ## CI containers logs
 # ────────────────────────────────────────────────────────────────
 ci-install: ## Install Composer dependencies (env=test)
 	$(call title,CI Composer install)
-	@$(CI_COMPOSER) install --prefer-dist --optimize-autoloader
+	@$(CI_EXEC_ROOT) chown -R www-data:www-data /var/www/html
+	@$(CI_COMPOSER) install --prefer-dist --optimize-autoloader $(if $(ARGS),$(ARGS),)
 	$(call success,Dependencies installed.)
 
 # ────────────────────────────────────────────────────────────────
@@ -79,7 +78,8 @@ ci-install: ## Install Composer dependencies (env=test)
 ci-migrate: ## Create test DB and run migrations
 	$(call title,CI Database setup)
 	@$(CI_CONSOLE) doctrine:database:create --if-not-exists --env=test
-	@$(CI_CONSOLE) doctrine:migrations:migrate --no-interaction --env=test
+	@$(CI_EXEC) bash -c 'if ls migrations/Version*.php >/dev/null 2>&1; then php bin/console doctrine:migrations:migrate --no-interaction --env=test; else echo "No migrations found, skipping..."; fi'
+	@$(CI_CONSOLE) doctrine:schema:update --force --env=test
 	$(call success,Database ready.)
 
 ci-db-fixtures: ## Load fixtures into test DB
@@ -135,7 +135,7 @@ ci-security: ## Composer dependencies audit (vulnerabilities)
 # ────────────────────────────────────────────────────────────────
 ci-test: ## Run PHPUnit (env=test, without coverage)
 	$(call title,CI PHPUnit)
-	@$(CI_PHP) bin/phpunit --ansi \
+	@$(CI_PHP) bin/phpunit \
 		--testdox \
 		$(if $(ARGS),$(ARGS),)
 	$(call success,Tests passed.)
