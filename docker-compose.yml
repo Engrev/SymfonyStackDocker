@@ -201,7 +201,7 @@ services:
             interval: 30s
             timeout: 10s
             retries: 3
-
+    
     mailpit:
         profiles: [ "mailpit" ]
         container_name: ${PROJECT_SLUG:-symfony-app}-mailpit
@@ -224,6 +224,36 @@ services:
             interval: 30s
             timeout: 10s
             retries: 3
+    
+    messenger-worker:
+        container_name: ${PROJECT_SLUG:-symfony-app}-messenger
+        restart: unless-stopped
+        build:
+            context: .
+            dockerfile: .docker/php/Dockerfile
+            args:
+                PHP_VERSION: ${PHP_VERSION:-8.2}
+                USER_ID: ${USER_ID:-1000}
+                GROUP_ID: ${GROUP_ID:-1000}
+        command: php bin/console messenger:consume user_emails --limit=50 --memory-limit=128M -vv
+        environment:
+            APP_ENV: ${APP_ENV:-dev}
+        depends_on:
+            php:
+                condition: service_healthy
+            db-mariadb:
+                condition: service_healthy
+                required: false
+            db-postgres:
+                condition: service_healthy
+                required: false
+            redis:
+                condition: service_healthy
+                required: false
+        volumes:
+            - ./app:/var/www/html:cached
+        networks:
+            - internal
 
 networks:
     internal:

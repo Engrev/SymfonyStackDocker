@@ -167,7 +167,7 @@ task('deploy:secrets', function () {
         info('ℹ️ .env.local.php already exists in shared/, skipping generation.');
         return;
     }
-
+    
     $appSecret = getenv('APP_SECRET') ?: bin2hex(random_bytes(16));
     $dbUser = getenv('DB_USER');
     $dbPass = getenv('DB_PASSWORD');
@@ -180,7 +180,7 @@ task('deploy:secrets', function () {
     $mailerDsnPass = getenv('MAILER_DSN_PASSWORD');
     $mailerDsnHost = getenv('MAILER_DSN_HOST') ?: '127.0.0.1';
     $mailerDsnPort = getenv('MAILER_DSN_PORT') ?: '587';
-
+    
     if (!$dbUser || !$dbPass || !$dbName) {
         info('Missing database secrets (DB_USER, DB_PASSWORD, DB_NAME), skipping .env.local.php generation.');
         return;
@@ -189,10 +189,10 @@ task('deploy:secrets', function () {
         info('Missing mailer secrets (MAILER_DSN_USER, MAILER_DSN_PASSWORD, MAILER_DSN_HOST), skipping .env.local.php generation.');
         return;
     }
-
+    
     $dbUrl = "mysql://$dbUser:$dbPass@$dbHost:$dbPort/$dbName?$dbOptions";
     $mailerDsn = "smtp://$mailerDsnUser:$mailerDsnPass@$mailerDsnHost:$mailerDsnPort";
-
+    
     $content = "<?php\n\nreturn [\n";
     $content .= "    'APP_ENV' => 'prod',\n";
     $content .= "    'APP_SECRET' => '$appSecret',\n";
@@ -202,7 +202,7 @@ task('deploy:secrets', function () {
     $content .= "    'MESSENGER_TRANSPORT_DSN' => '$messengerTransportDsn',\n";
     $content .= "    'MAILER_DSN' => '$mailerDsn',\n";
     $content .= "];\n";
-
+    
     $tmpFile = tempnam(sys_get_temp_dir(), 'env');
     file_put_contents($tmpFile, $content);
     
@@ -234,7 +234,7 @@ task('deploy:check', function () {
     } else {
         info("❌ MySQL driver NOT found.");
     }
-
+    
     info("Checking configuration file (.env.local.php) in shared/:");
     $exists = run("if [ -f {{deploy_path}}/shared/.env.local.php ]; then echo 'exists'; else echo 'missing'; fi");
     if ($exists === 'exists') {
@@ -288,7 +288,7 @@ task('deploy:healthcheck', function () {
         info('No healthcheck_url configured, skipping.');
         return;
     }
-
+    
     $attempts = 5;
     for ($i = 1; $i <= $attempts; $i++) {
         try {

@@ -64,12 +64,12 @@ down: ## Stop and remove containers and default resources
 
 start: ## Start all Docker services (attached mode)
 	$(call title,Docker Start)
-	@$(DOCKER_COMPOSE) up --remove-orphans
+	@docker compose up --remove-orphans
 	$(call success,Containers started successfully.)
 
 stop: ## Stop all Docker services
 	$(call title,Docker Stop)
-	@$(DOCKER_COMPOSE) stop
+	@docker compose stop
 	$(call success,Containers stopped successfully.)
 
 restart: ## Restart all Docker services (down and up)
@@ -84,12 +84,12 @@ restart-soft: ## Restart all Docker services (stop and start)
 
 build: ## Build all Docker services
 	$(call title,Docker Build)
-	@$(DOCKER_COMPOSE) build
+	@docker compose build
 	$(call success,Docker images built successfully.)
 
 build-no-cache: ## Build all Docker services (without cache)
 	$(call title,Docker Build no cache)
-	@$(DOCKER_COMPOSE) build --no-cache
+	@docker compose build --no-cache
 	$(call success,Docker images built successfully \(no cache\).)
 
 destroy: ## Force remove all containers, networks, volumes, and images created
@@ -98,7 +98,7 @@ destroy: ## Force remove all containers, networks, volumes, and images created
 	@printf "This action cannot be undone. Please confirm that you want to proceed.$(RESET)\n\n"
 	@read -p "Are you sure ? (yes/no) : " confirm_destroy; \
 	if [ "$$confirm_destroy" = "yes" ]; then \
-		$(DOCKER_COMPOSE_DOWN); \
+		$(DOCKER_COMPOSE_DOWN) --volumes --rmi all; \
     	printf "\n$(GREEN)Project destroyed successfully.$(RESET)\n"; \
 	else \
 		printf "\n$(YELLOW)/!\ Action cancelled. No resources were removed.$(RESET)\n"; \
@@ -106,23 +106,23 @@ destroy: ## Force remove all containers, networks, volumes, and images created
 
 ps: ## List running Docker containers
 	$(call title,Docker PS)
-	@$(DOCKER_COMPOSE) ps
+	@docker compose ps
 
 logs: ## Affiche les logs (tous les services)
 	$(call title,Docker logs)
-	@$(DOCKER_COMPOSE) logs -f --tail=100
+	@docker compose logs -f --tail=100
 
 logs-php: ## Logs du container PHP
 	$(call title,Docker PHP logs)
-	@$(DOCKER_COMPOSE) logs -f --tail=100 php
+	@docker compose logs -f --tail=100 php
 
 logs-web: ## Logs du serveur web
 	$(call title,Docker webserver logs)
-	@$(DOCKER_COMPOSE) logs -f --tail=100 web-nginx web-apache
+	@docker compose logs -f --tail=100 web-nginx web-apache
 
 logs-db: ## Logs de la base de données
 	$(call title,Docker database logs)
-	@$(DOCKER_COMPOSE) logs -f --tail=100 db-mariadb db-postgres
+	@docker compose logs -f --tail=100 db-mariadb db-postgres
 
 ##@ Terminals
 

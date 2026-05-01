@@ -104,7 +104,11 @@ _app-env: ## Generates app/.env.local (DB_URL, Mailpit DSN, REDIS_URL if enabled
 		cp .env.local.dist app/.env.local; \
 		sed -i "s/%%DATABASE%%/$$db_url/g" app/.env.local; \
 		sed -i "s/%%DSN%%/smtp:\/\/mailpit:1025/g" app/.env.local; \
-		if [ ! -z "$(REDIS_EXTERNAL_PORT)" ]; then echo "REDIS_URL=redis://redis:$(REDIS_EXTERNAL_PORT)" >> app/.env.local; fi; \
+		if [ ! -z "$(REDIS_EXTERNAL_PORT)" ]; then \
+			sed -i "s/%%MESSENGER%%/redis:\/\/redis:6379\/messages/g" app/.env.local; \
+		else \
+			sed -i "s/%%MESSENGER%%/doctrine:\/\/default?auto_setup=0/g" app/.env.local; \
+		fi; \
 		printf "\n$(GREEN)app/.env.local created.$(RESET)\n"; \
 	fi
 

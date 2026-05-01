@@ -50,7 +50,7 @@ services:
             timeout: 5s
             retries: 10
             start_period: 10s
-
+    
     db-mariadb:
         profiles: ["ci-mariadb"]
         container_name: ${PROJECT_SLUG:-symfony-app}-db-ci
@@ -70,7 +70,7 @@ services:
             start_period: 15s
         tmpfs:
             - /var/lib/mysql   # RAM Data: Faster startup in CI
-
+    
     db-postgres:
         profiles: ["ci-postgres"]
         container_name: ${PROJECT_SLUG:-symfony-app}-db-ci
